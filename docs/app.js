@@ -90,7 +90,6 @@
 
   /* ---------- screen 1: identity ---------- */
 
-  // Pressing Enter in any text field triggers its screen's primary button.
   function submitOnEnter(inputId, buttonId) {
     $(inputId).addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -99,9 +98,24 @@
       }
     });
   }
-  ["name-1", "num-1", "name-2", "num-2"].forEach((id) =>
-    submitOnEnter(id, "btn-check")
-  );
+
+  // Enter submits the identity form only once every required field is filled,
+  // so a half-completed form never triggers the "please fill both" error.
+  function identityComplete() {
+    const filled = (id) => $(id).value.trim() !== "";
+    if (!filled("name-1") || !filled("num-1")) return false;
+    if ($("twins-toggle").checked && (!filled("name-2") || !filled("num-2"))) return false;
+    return true;
+  }
+  ["name-1", "num-1", "name-2", "num-2"].forEach((id) => {
+    $(id).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (identityComplete()) $("btn-check").click();
+      }
+    });
+  });
+
   submitOnEnter("passcode-input", "btn-verify-passcode");
 
   $("twins-toggle").addEventListener("change", (e) => {
