@@ -248,7 +248,7 @@ function handleTally(req) {
   }
   var config = readConfig();
   var tokenHash = sha256Hex(String(req.adminToken || ''));
-  if (!config.ADMIN_TOKEN_HASH || tokenHash !== String(config.ADMIN_TOKEN_HASH).toLowerCase()) {
+  if (!config.SALT || tokenHash !== String(config.SALT).toLowerCase()) {
     recordFailure();
     audit('tally', '', 'UNAUTHORIZED', '');
     return fail('UNAUTHORIZED', '管理密鑰錯誤。');
@@ -537,7 +537,7 @@ function adminSetupSheets() {
   var config = readConfig();
   var defaults = [
     ['ELECTION_STATUS', 'CLOSED'],
-    ['ADMIN_TOKEN_HASH', ''],
+    ['SALT', ''],
     ['VOTES_REQUIRED', '4'],
     ['ELECTION_TITLE', '家長代表選舉'],
   ];

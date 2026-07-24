@@ -38,7 +38,7 @@ printf 'hp-pre-v1|測試生|1' | shasum -a 256
 
 | Tab | Columns |
 |---|---|
-| `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN`/`CLOSED`), `ADMIN_TOKEN_HASH` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
+| `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN`/`CLOSED`), `SALT` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
 | `Roster` | A: `family_id` (F01…), B: `display_name` (candidate label), C: `student_names` (comma-separated for twins), D: `student_numbers`, E: `key_hash` (H2 — filled by `adminRebuildHashes()`, never by hand), F: `eligible` (Y/N), G: `notes` |
 | `Ballots` | A: `key_hash`, B: `family_id`, C–F: `vote1..vote4`, G: `first_claimed_at`, H: `last_updated_at`, I: `revision`, J: `passcode_hash` |
 | `AuditLog` | A: timestamp, B: action, C: key prefix (12 hex), D: result, E: detail |
@@ -62,7 +62,7 @@ Repo is served by GitHub Pages from `main` branch, `/docs` folder → https://tu
 ```bash
 openssl rand -hex 32   # PEPPER → Apps Script Script Properties
 openssl rand -hex 16   # admin token → keep in password manager
-printf '%s' "<token>" | shasum -a 256   # → Config.ADMIN_TOKEN_HASH
+printf '%s' "<token>" | shasum -a 256   # → Config.SALT
 ```
 
 ### 4. Apps Script
