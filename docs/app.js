@@ -21,34 +21,10 @@
 
   const $ = (id) => document.getElementById(id);
 
-  /* ---------- key derivation (mirrors Code.gs) ---------- */
+  /* ---------- key derivation: shared module (docs/key.js, mirrors Code.gs) ---------- */
 
-  function normalizeName(raw) {
-    return raw.normalize("NFKC").replace(/\s+/g, "").toLowerCase();
-  }
-
-  function normalizeNumber(raw) {
-    return raw.normalize("NFKC").replace(/\D/g, "").replace(/^0+/, "");
-  }
-
-  function canonicalString(pairs) {
-    const sorted = [...pairs].sort(
-      (a, b) =>
-        Number(a.num) - Number(b.num) ||
-        (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-    );
-    return "hp-pre-v1|" + sorted.map((p) => `${p.name}|${p.num}`).join("|");
-  }
-
-  async function computeKey(canonical) {
-    const buf = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(canonical)
-    );
-    return [...new Uint8Array(buf)]
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
+  const { normalizeName, normalizeNumber, canonicalString, computeKey } =
+    window.HP_KEY;
 
   /* ---------- API client ---------- */
 

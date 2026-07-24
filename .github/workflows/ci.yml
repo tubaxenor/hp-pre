@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntax-check frontend and backend sources
+        run: |
+          node --check docs/key.js
+          node --check docs/app.js
+          node --check docs/config.js
+          cp apps-script/Code.gs /tmp/Code.gs.js
+          node --check /tmp/Code.gs.js
+
+      - name: Guard rails
+        run: |
+          # Voter-facing terminology: 座號, never 學號
+          ! grep -rn "學號" docs/ apps-script/
+          # GAS URL must be configured (not the scaffold placeholder)
+          ! grep -q "REPLACE_WITH_GAS_EXEC_URL" docs/config.js
+
+      - name: Run key-derivation tests
+        run: node --test test/key.test.mjs
