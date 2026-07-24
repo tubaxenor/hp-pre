@@ -38,7 +38,8 @@ printf 'hp-pre-v1|測試生|1' | shasum -a 256
 
 | Tab | Columns |
 |---|---|
-| `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN`/`CLOSED`), `SALT` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
+| `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN` / `CLOSED` / `ENDED`), `SALT` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
+| `結果` | Ranked vote tally (formula-driven). Stays blank until `ELECTION_STATUS = ENDED`. Create/rebuild with `adminCreateResultsTab()`. |
 | `Roster` | A: `family_id` (F01…), B: `display_name` (candidate label), C: `student_names` (comma-separated for twins), D: `student_numbers`, E: `key_hash` (H2 — filled by `adminRebuildHashes()`, never by hand), F: `eligible` (Y/N), G: `notes` |
 | `Ballots` | A: `key_hash`, B: `family_id`, C–F: `vote1..vote4`, G: `first_claimed_at`, H: `last_updated_at`, I: `revision`, J: `passcode_hash` |
 | `AuditLog` | A: timestamp, B: action, C: key prefix (12 hex), D: result, E: detail |
@@ -80,7 +81,8 @@ Put the `/exec` URL into `docs/config.js` → commit → push. Pages redeploys a
 ### 6. Go live / close
 
 - Open: set `Config.ELECTION_STATUS = OPEN`, distribute the site URL.
-- Close: set `CLOSED`. Votes are rejected; `check` still works.
+- Close (pause): set `CLOSED`. Votes are rejected; `check` still works; results stay hidden.
+- End: set `ENDED`. Votes rejected (same as CLOSED) **and** the `結果` tab reveals the ranked tally.
 - Tally: `POST {"action":"tally","adminToken":"<token>"}` to the `/exec` URL (works while OPEN too — turnout monitoring).
 - Archive: File → Make a copy of the spreadsheet.
 

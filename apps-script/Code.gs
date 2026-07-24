@@ -571,3 +571,56 @@ function adminRebuildHashes() {
     sheet.getRange(r + 1, 5).setValue(serverHash(h1));
   }
 }
+
+/**
+ * Builds the "結果" tab: votes per candidate, ranked high-to-low.
+ * Results stay blank until Config ELECTION_STATUS = "ENDED" (a third state
+ * alongside OPEN/CLOSED; voting is already rejected whenever status != OPEN).
+ * Safe to re-run; rebuilds the sheet. Formulas only (COUNTIF/SORT/FILTER),
+ * so it stays live without re-running.
+ */
+function adminCreateResultsTab() {
+  var s = ss();
+  var roster = s.getSheetByName(SHEET_ROSTER).getDataRange().getValues();
+  var n = 0;
+  for (var i = 1; i < roster.length; i++) if (roster[i][0]) n++;
+
+  var sheet = s.getSheetByName('結果') || s.insertSheet('結果');
+  sheet.clear();
+
+  sheet.getRange('A1').setFormula(
+    '=IF(Config!$B$2="ENDED","投票結果（已結束）","結果尚未公開：將 Config 的 ELECTION_STATUS 改為 ENDED 後才會顯示")'
+  );
+  sheet.getRange('A1').setFontWeight('bold').setFontSize(13);
+  sheet.getRange('A2').setValue('投票戶數');
+  sheet.getRange('B2').setFormula('=IF(Config!$B$2="ENDED",COUNTIF(Ballots!$C$2:$C,"<>"),"—")');
+  sheet.getRange('A4:C4').setValues([['名次', '候選家庭', '得票數']]);
+  sheet.getRange('A4:C4').setFontWeight('bold');
+
+  var first = 5;
+  var last = first + n - 1;
+
+  // Hidden helper columns E (candidate name) / F (vote count, gated on ENDED).
+  var helper = [];
+  for (var r = 0; r < n; r++) {
+    var rr = r + 2; // roster data row
+    helper.push([
+      '=Roster!B' + rr,
+      '=IF(Config!$B$2="ENDED",COUNTIF(Ballots!$C$2:$F,Roster!A' + rr + '),"")',
+    ]);
+  }
+  sheet.getRange(first, 5, n, 2).setFormulas(helper);
+
+  // Display: rank + sorted name/count, all blank until ENDED.
+  sheet.getRange('A' + first).setFormula(
+    '=IF(Config!$B$2<>"ENDED","",IFERROR(SEQUENCE(COUNT($F$' + first + ':$F$' + last + ')),""))'
+  );
+  sheet.getRange('B' + first).setFormula(
+    '=IFERROR(SORT(FILTER($E$' + first + ':$F$' + last + ',$F$' + first + ':$F$' + last + '<>""),2,FALSE),"")'
+  );
+
+  sheet.hideColumns(5, 2);
+  sheet.setColumnWidth(1, 60);
+  sheet.setColumnWidth(2, 160);
+  sheet.setColumnWidth(3, 90);
+}
