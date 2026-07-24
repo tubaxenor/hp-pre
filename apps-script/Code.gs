@@ -217,7 +217,7 @@ function validateKeyAndRate(key, action) {
     return {
       error: fail(
         'UNKNOWN_STUDENT',
-        '查無此學生資料，請確認姓名與學號是否正確（雙胞胎家庭請勾選並填寫兩位學生）。'
+        '查無此學生資料，請確認姓名與座號是否正確（雙胞胎家庭請勾選並填寫兩位學生）。'
       ),
     };
   }

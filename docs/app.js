@@ -120,7 +120,7 @@
     const name1 = normalizeName($("name-1").value);
     const num1 = normalizeNumber($("num-1").value);
     if (!name1 || !num1) {
-      showError("請填寫學生姓名與學號。");
+      showError("請填寫學生姓名與座號。");
       return;
     }
     pairs.push({ name: name1, num: num1 });
@@ -129,7 +129,7 @@
       const name2 = normalizeName($("name-2").value);
       const num2 = normalizeNumber($("num-2").value);
       if (!name2 || !num2) {
-        showError("已勾選雙胞胎，請填寫第二位學生的姓名與學號。");
+        showError("已勾選雙胞胎，請填寫第二位學生的姓名與座號。");
         return;
       }
       pairs.push({ name: name2, num: num2 });
