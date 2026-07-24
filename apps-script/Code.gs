@@ -432,6 +432,7 @@ function adminSetupSheets() {
   defaults.forEach(function (kv) {
     if (!(kv[0] in config)) configSheet.appendRow(kv);
   });
+  adminRebuildHashes();
 }
 
 /**
