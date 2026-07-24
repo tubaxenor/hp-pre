@@ -6,12 +6,12 @@
 
 [data-theme="hppre"] {
   color-scheme: light;
-  --color-base-100: oklch(97.5% 0.012 85);   /* warm paper */
-  --color-base-200: oklch(94.5% 0.016 85);
-  --color-base-300: oklch(90% 0.02 85);
-  --color-base-content: oklch(25% 0.015 60); /* ink */
-  --color-primary: oklch(50% 0.17 30);       /* seal red 朱紅 */
-  --color-primary-content: oklch(98% 0.01 85);
+  --color-base-100: oklch(96.5% 0.024 70);   /* warm apricot paper 木棉暖紙 */
+  --color-base-200: oklch(93.5% 0.03 70);
+  --color-base-300: oklch(89% 0.035 70);
+  --color-base-content: oklch(26% 0.02 55);  /* warm ink */
+  --color-primary: oklch(56% 0.17 42);       /* 木棉花 kapok vermilion-orange */
+  --color-primary-content: oklch(98% 0.012 75);
   --color-secondary: oklch(45% 0.06 250);
   --color-secondary-content: oklch(98% 0.01 85);
   --color-accent: oklch(65% 0.12 65);
@@ -37,9 +37,9 @@
 }
 
 :root {
-  --seal: oklch(50% 0.17 30);
-  --seal-deep: oklch(42% 0.16 30);
-  --ink: oklch(25% 0.015 60);
+  --seal: oklch(56% 0.17 42);       /* 木棉 kapok blossom */
+  --seal-deep: oklch(47% 0.16 42);
+  --ink: oklch(26% 0.02 55);
   --serif: "Noto Serif TC", serif;
   --sans: "Noto Sans TC", sans-serif;
 }
@@ -51,20 +51,26 @@ body {
   min-height: 100dvh;
 }
 
-/* Paper grain + vignette atmosphere */
+/* Warm paper grain + kapok blossom watermarks (木棉花) */
 .paper-bg {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background:
-    radial-gradient(ellipse at 50% 0%, oklch(99% 0.01 85 / 0.9), transparent 60%),
-    repeating-linear-gradient(0deg, transparent 0 2px, oklch(50% 0.03 60 / 0.012) 2px 3px),
-    repeating-linear-gradient(90deg, transparent 0 2px, oklch(50% 0.03 60 / 0.012) 2px 3px);
+  background-image:
+    radial-gradient(ellipse at 50% 0%, oklch(99% 0.018 75 / 0.9), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg transform='translate(100 100)' fill='%23c9501e' fill-opacity='0.07'%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(72)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(144)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(216)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(288)'/%3E%3Ccircle r='15' fill='%23904413' fill-opacity='0.5'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg transform='translate(100 100) rotate(24)' fill='%23c9501e' fill-opacity='0.09'%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(72)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(144)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(216)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(288)'/%3E%3Ccircle r='15' fill='%23904413' fill-opacity='0.5'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg transform='translate(100 100) rotate(-30)' fill='%23c9501e' fill-opacity='0.055'%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(72)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(144)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(216)'/%3E%3Cellipse cx='0' cy='-44' rx='26' ry='40' transform='rotate(288)'/%3E%3Ccircle r='15' fill='%23904413' fill-opacity='0.5'/%3E%3C/g%3E%3C/svg%3E"),
+    repeating-linear-gradient(0deg, transparent 0 2px, oklch(55% 0.06 60 / 0.014) 2px 3px),
+    repeating-linear-gradient(90deg, transparent 0 2px, oklch(55% 0.06 60 / 0.014) 2px 3px);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat;
+  background-position: 50% 0%, right -70px top -50px, left -60px bottom -40px, right 8% bottom 18%, 0 0, 0 0;
+  background-size: auto, 340px 340px, 280px 280px, 150px 150px, auto, auto;
 }
 
 /* ---- Document header ---- */
 .doc-rule { height: 6px; background: var(--seal); }
-.doc-rule-thin { height: 1px; background: oklch(25% 0.015 60 / 0.25); }
+.doc-rule-thin { height: 1px; background: oklch(30% 0.03 55 / 0.25); }
 .doc-title {
   font-family: var(--serif);
   font-weight: 900;
@@ -80,9 +86,9 @@ body {
 
 /* ---- Cards as ballot paper ---- */
 .ballot-card {
-  background: oklch(99% 0.008 85);
-  border: 1px solid oklch(25% 0.015 60 / 0.18);
-  box-shadow: 0 1px 2px oklch(25% 0.015 60 / 0.06), 0 8px 24px oklch(25% 0.015 60 / 0.05);
+  background: oklch(99% 0.012 75);
+  border: 1px solid oklch(30% 0.03 55 / 0.18);
+  box-shadow: 0 1px 2px oklch(30% 0.03 55 / 0.06), 0 8px 24px oklch(30% 0.03 55 / 0.06);
 }
 .section-title {
   font-family: var(--serif);
@@ -133,16 +139,16 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid oklch(25% 0.015 60 / 0.25);
+  border: 1px solid oklch(30% 0.03 55 / 0.25);
   border-radius: 0.4rem;
   padding: 0.85rem 0.5rem 0.7rem;
-  background: oklch(99% 0.008 85);
+  background: oklch(99% 0.012 75);
   cursor: pointer;
   user-select: none;
   transition: border-color 0.15s, background 0.15s, opacity 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.candidate-cell:hover { border-color: oklch(25% 0.015 60 / 0.45); }
+.candidate-cell:hover { border-color: oklch(30% 0.03 55 / 0.45); }
 .candidate-cell input { position: absolute; opacity: 0; pointer-events: none; }
 
 .candidate-name {
@@ -160,7 +166,7 @@ body {
   place-items: center;
   width: 2.4rem;
   height: 2.4rem;
-  border: 1.5px dashed oklch(25% 0.015 60 / 0.3);
+  border: 1.5px dashed oklch(30% 0.03 55 / 0.3);
   border-radius: 9999px;
   color: transparent;
   font-family: var(--serif);
@@ -184,12 +190,12 @@ body {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  border: 1px solid oklch(25% 0.015 60 / 0.15);
+  border: 1px solid oklch(30% 0.03 55 / 0.15);
   border-radius: 0.4rem;
   padding: 0.5rem 0.8rem;
   font-family: var(--serif);
   font-weight: 600;
-  background: oklch(99% 0.008 85);
+  background: oklch(99% 0.012 75);
 }
 .current-votes li::before {
   content: "圈";
@@ -213,8 +219,8 @@ body {
   bottom: 0;
   background: oklch(99% 0.008 85 / 0.92);
   backdrop-filter: blur(8px);
-  border-top: 1px solid oklch(25% 0.015 60 / 0.2);
-  box-shadow: 0 -4px 16px oklch(25% 0.015 60 / 0.08);
+  border-top: 1px solid oklch(30% 0.03 55 / 0.2);
+  box-shadow: 0 -4px 16px oklch(30% 0.03 55 / 0.08);
   z-index: 30;
 }
 .select-count { font-family: var(--serif); font-weight: 900; font-size: 1.3rem; color: var(--seal); }
@@ -255,7 +261,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: oklch(97.5% 0.012 85 / 0.85);
+  background: oklch(96.5% 0.024 70 / 0.85);
   backdrop-filter: blur(2px);
 }
 
