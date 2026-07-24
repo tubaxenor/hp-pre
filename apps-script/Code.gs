@@ -65,40 +65,83 @@ function doPost(e) {
 function handleCheck(req) {
   var gate = validateKeyAndRate(req.key, 'check');
   if (gate.error) return gate.error;
-  var family = gate.family;
 
   var config = readConfig();
-  var ballot = findBallot(gate.h2);
+  var open = config.ELECTION_STATUS === 'OPEN';
   var res = {
     ok: true,
     registered: true,
-    hasBallot: !!ballot,
-    electionOpen: config.ELECTION_STATUS === 'OPEN',
+    electionOpen: open,
     title: config.ELECTION_TITLE || '家長代表選舉',
     candidates: listCandidates(),
   };
-  if (ballot) {
-    if (ballot.passcodeHash) {
-      var pc = normalizePasscode(req.passcode);
-      if (!pc) {
-        // Current votes stay hidden until the passcode is presented.
-        res.passcodeRequired = true;
-      } else if (passcodeHash(gate.h2, pc) === ballot.passcodeHash) {
-        res.passcodeOk = true;
+
+  var ballot = findBallot(gate.h2);
+
+  if (!ballot) {
+    if (!open) {
+      res.hasBallot = false;
+      audit('check', gate.h2, 'OK', 'closed, unclaimed');
+      return jsonOut(res);
+    }
+    // First successful identity check claims the ballot and issues the passcode.
+    var lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+    } catch (err) {
+      return fail('SERVER_ERROR', '系統忙碌中，請稍後再試。');
+    }
+    try {
+      ballot = findBallot(gate.h2);
+      if (!ballot) {
+        var passcode = generatePasscode();
+        ss().getSheetByName(SHEET_BALLOTS).appendRow([
+          gate.h2,
+          gate.family.familyId,
+          '', '', '', '',
+          new Date().toISOString(),
+          '',
+          0,
+          passcodeHash(gate.h2, passcode),
+        ]);
+        res.hasBallot = true;
+        res.hasVoted = false;
+        res.passcode = passcode;
+        audit('check', gate.h2, 'OK', 'ballot claimed');
+        return jsonOut(res);
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  res.hasBallot = true;
+  if (ballot.passcodeHash) {
+    var pc = normalizePasscode(req.passcode);
+    if (!pc) {
+      // Voted-or-not and current votes stay hidden until the passcode is presented.
+      res.passcodeRequired = true;
+    } else if (passcodeHash(gate.h2, pc) === ballot.passcodeHash) {
+      res.passcodeOk = true;
+      res.hasVoted = ballot.hasVoted;
+      if (ballot.hasVoted) {
         res.currentVotes = ballot.votes;
         res.revision = ballot.revision;
-      } else {
-        recordFailure();
-        audit('check', gate.h2, 'PASSCODE_WRONG', '');
-        return fail('PASSCODE_WRONG', '領票碼錯誤，請確認後再試。');
       }
     } else {
-      // Legacy ballot claimed before passcodes existed; next vote issues one.
+      recordFailure();
+      audit('check', gate.h2, 'PASSCODE_WRONG', '');
+      return fail('PASSCODE_WRONG', '領票碼錯誤，請確認後再試。');
+    }
+  } else {
+    // Legacy ballot without a passcode; next vote issues one.
+    res.hasVoted = ballot.hasVoted;
+    if (ballot.hasVoted) {
       res.currentVotes = ballot.votes;
       res.revision = ballot.revision;
     }
   }
-  audit('check', gate.h2, 'OK', 'hasBallot=' + res.hasBallot);
+  audit('check', gate.h2, 'OK', 'hasVoted=' + !!res.hasVoted);
   return jsonOut(res);
 }
 
@@ -171,7 +214,8 @@ function handleVote(req) {
         .setValues([votes]);
       sheet.getRange(existing.row, 8).setValue(now);
       sheet.getRange(existing.row, 9).setValue(revision);
-      status = 'updated';
+      // First actual vote on a freshly claimed (empty) ballot is a claim, not a change.
+      status = existing.hasVoted ? 'updated' : 'claimed';
     } else {
       revision = 1;
       newPasscode = generatePasscode();
@@ -215,6 +259,7 @@ function handleTally(req) {
   var totalBallots = 0;
   for (var r = 1; r < ballots.length; r++) {
     if (!ballots[r][0]) continue;
+    if (!String(ballots[r][2])) continue; // claimed but not voted
     totalBallots++;
     for (var c = 2; c <= 5; c++) {
       var id = String(ballots[r][c]);
@@ -314,7 +359,8 @@ function findBallot(h2) {
       return {
         row: r + 1,
         votes: [rows[r][2], rows[r][3], rows[r][4], rows[r][5]].map(String),
-        revision: Number(rows[r][8]) || 1,
+        hasVoted: !!String(rows[r][2]),
+        revision: Number(rows[r][8]) || 0,
         passcodeHash: rows[r][9] ? String(rows[r][9]) : '',
       };
     }

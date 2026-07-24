@@ -10,8 +10,8 @@ Static voting site for a class parent-representative election.
 
 1. A parent enters their student's name + student number (twins: both students). The browser normalizes the input and computes `H1 = SHA-256(canonical string)` via the Web Crypto API. **Raw names/numbers never leave the browser** — only H1 is sent.
 2. The server computes `H2 = HMAC-SHA256(PEPPER, H1)` and looks it up in the roster. Valid key → returns candidates and ballot state.
-3. No ballot yet → 領選票 (claim). Claiming issues a **5-char passcode (領票碼)** shown once — the server stores only `HMAC-SHA256(PEPPER, key_hash|passcode)`.
-4. Ballot exists → 更改選票 (change). The voter must enter the passcode before current votes are revealed or overwritten (revision +1). A family can never obtain a second ballot.
+3. First successful identity check **claims the ballot immediately**: a Ballots row is created (votes empty, revision 0) and a **5-char passcode (領票碼)** is issued and shown once with a save-it warning — the server stores only `HMAC-SHA256(PEPPER, key_hash|passcode)`.
+4. Every later visit (and every vote) requires the passcode before the voted/unvoted state or current votes are revealed or overwritten. First actual vote = revision 1 (領選票); overwrites increment (更改選票). A family can never obtain a second ballot; tally counts only rows with votes.
 5. Results are readable only via the `tally` action with a secret admin token. The spreadsheet itself is owner-only.
 
 **Lost passcode**: the admin clears that row's `passcode_hash` cell in `Ballots`; the family's next vote issues a fresh passcode.
@@ -90,9 +90,9 @@ All requests: `POST` to the `/exec` URL with `Content-Type: text/plain;charset=u
 
 | Action | Request | Response |
 |---|---|---|
-| `check` | `{action, key, passcode?}` | `{registered, hasBallot, electionOpen, title, candidates[], passcodeRequired?, currentVotes?, revision?}` — with a ballot present, `currentVotes` is returned only with the correct passcode (or for legacy ballots without one) |
+| `check` | `{action, key, passcode?}` | `{registered, hasBallot, hasVoted?, electionOpen, title, candidates[], passcode?, passcodeRequired?, currentVotes?, revision?}` — first check while OPEN claims the ballot and returns `passcode` once; later checks return `passcodeRequired` until the correct passcode is presented, which unlocks `hasVoted`/`currentVotes` |
 | `getCandidates` | `{action, key}` | `{candidates[]}` |
-| `vote` | `{action, key, votes[4], passcode?}` | `{status: "claimed"\|"updated", revision, passcode?}` — `passcode` returned on claim (and on first update of a legacy ballot); required to update a passcode-protected ballot |
+| `vote` | `{action, key, votes[4], passcode}` | `{status: "claimed"\|"updated", revision}` — `claimed` on the first vote of a claimed ballot; passcode required whenever the ballot has one |
 | `tally` | `{action, adminToken}` | `{electionStatus, totalBallots, results[]}` |
 
 Errors: `BAD_REQUEST, UNKNOWN_STUDENT, ELECTION_CLOSED, INVALID_VOTES, PASSCODE_WRONG, UNAUTHORIZED, RATE_LIMITED, SERVER_ERROR`.

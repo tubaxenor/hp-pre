@@ -17,6 +17,8 @@
     selected: new Set(),
     passcode: null,        // entered by voter (change) or issued by server (claim)
     passcodeRequired: false,
+    hasVoted: false,
+    claimedNow: false,     // passcode was issued in this session's check
   };
 
   const $ = (id) => document.getElementById(id);
@@ -123,10 +125,12 @@
       }
       state.candidates = res.candidates || [];
       state.hasBallot = res.hasBallot;
+      state.hasVoted = !!res.hasVoted;
       state.currentVotes = res.currentVotes || [];
       state.revision = res.revision || 0;
       state.electionOpen = res.electionOpen;
-      state.passcode = null;
+      state.passcode = res.passcode || null;
+      state.claimedNow = !!res.passcode;
       state.passcodeRequired = !!res.passcodeRequired;
       if (res.title) $("election-title").textContent = res.title;
       renderStatus();
@@ -141,25 +145,44 @@
   /* ---------- screen 2: ballot status ---------- */
 
   function renderStatus() {
-    const changing = state.hasBallot;
-    const locked = changing && state.passcodeRequired;
-    $("stamp-text").textContent = changing ? "更改選票" : "領選票";
-    $("status-title").textContent = changing ? "更改選票" : "領取選票";
-    $("status-desc").textContent = changing
-      ? locked
-        ? "此家庭已投過票。請輸入領票碼以查看並更改選票。"
-        : "此家庭已投過票。您可以重新圈選，送出後將覆蓋原選票。"
-      : "身分確認成功！此家庭尚未投票，請領取選票並圈選 4 位候選家庭。";
+    const locked = state.hasBallot && state.passcodeRequired;
+    const claimed = state.claimedNow;
+    const voted = state.hasVoted;
+
+    let stamp, title, desc;
+    if (claimed) {
+      stamp = "領選票";
+      title = "領取選票";
+      desc = "身分確認成功，已為您登記選票！請先保存下方的領票碼，再開始圈選。";
+    } else if (locked) {
+      stamp = "領票碼";
+      title = "輸入領票碼";
+      desc = "此家庭已領取選票。請輸入領票碼以繼續。";
+    } else if (voted) {
+      stamp = "更改選票";
+      title = "更改選票";
+      desc = "此家庭已投過票。您可以重新圈選，送出後將覆蓋原選票。";
+    } else {
+      stamp = "領選票";
+      title = "領取選票";
+      desc = "選票尚未圈選，請開始圈選 4 位候選家庭。";
+    }
+    $("stamp-text").textContent = stamp;
+    $("status-title").textContent = title;
+    $("status-desc").textContent = desc;
+
+    $("claim-passcode-box").classList.toggle("hidden", !claimed);
+    if (claimed) $("claim-passcode").textContent = state.passcode;
 
     $("passcode-box").classList.toggle("hidden", !locked);
-    $("current-votes-box").classList.toggle("hidden", !changing || locked);
-    if (changing && !locked) {
+    $("current-votes-box").classList.toggle("hidden", !voted || locked);
+    if (voted && !locked) {
       renderVoteList($("current-votes"), state.currentVotes);
       $("revision-badge").textContent = `第 ${state.revision} 次填寫`;
     }
 
     const btn = $("btn-start-select");
-    btn.textContent = changing ? "重新圈選" : "開始圈選";
+    btn.textContent = voted ? "重新圈選" : "開始圈選";
     if (!state.electionOpen) {
       btn.disabled = true;
       showError("投票已截止，無法圈選或更改選票。");
@@ -187,6 +210,7 @@
       }
       state.passcode = pc;
       state.passcodeRequired = false;
+      state.hasVoted = !!res.hasVoted;
       state.currentVotes = res.currentVotes || [];
       state.revision = res.revision || 0;
       renderStatus();
@@ -199,7 +223,7 @@
 
   $("btn-start-select").addEventListener("click", () => {
     hideError();
-    state.selected = new Set(state.hasBallot ? state.currentVotes : []);
+    state.selected = new Set(state.hasVoted ? state.currentVotes : []);
     renderCandidates();
     showScreen("select");
   });
@@ -285,11 +309,14 @@
         return;
       }
       state.hasBallot = true;
+      state.hasVoted = true;
       state.currentVotes = votes;
       state.revision = res.revision;
       if (res.passcode) state.passcode = res.passcode;
-      $("done-passcode-box").classList.toggle("hidden", !res.passcode);
-      if (res.passcode) $("done-passcode").textContent = res.passcode;
+      // Repeat the passcode on the success screen when it was issued this session.
+      const remind = res.passcode || (state.claimedNow && state.passcode);
+      $("done-passcode-box").classList.toggle("hidden", !remind);
+      if (remind) $("done-passcode").textContent = state.passcode;
       const updated = res.status === "updated";
       $("done-stamp-text").textContent = updated ? "選票已更新" : "投票成功";
       $("done-title").textContent = updated ? "選票已更新！" : "投票成功！";
