@@ -219,6 +219,33 @@ body {
 }
 .select-count { font-family: var(--serif); font-weight: 900; font-size: 1.3rem; color: var(--seal); }
 
+/* ---- Passcode (領票碼) ---- */
+.passcode-input {
+  width: 9rem;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.passcode-reveal {
+  border: 2px dashed var(--seal);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  color: var(--seal-deep);
+  background: oklch(50% 0.17 30 / 0.05);
+}
+.passcode-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
+  color: var(--seal);
+}
+
 /* ---- Loading overlay ---- */
 .loading-overlay {
   position: fixed;

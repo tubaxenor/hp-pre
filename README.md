@@ -10,8 +10,11 @@ Static voting site for a class parent-representative election.
 
 1. A parent enters their student's name + student number (twins: both students). The browser normalizes the input and computes `H1 = SHA-256(canonical string)` via the Web Crypto API. **Raw names/numbers never leave the browser** — only H1 is sent.
 2. The server computes `H2 = HMAC-SHA256(PEPPER, H1)` and looks it up in the roster. Valid key → returns candidates and ballot state.
-3. No ballot yet → 領選票 (claim). Ballot exists → 更改選票 (change, overwrites; revision +1). A family can never obtain a second ballot.
-4. Results are readable only via the `tally` action with a secret admin token. The spreadsheet itself is owner-only.
+3. No ballot yet → 領選票 (claim). Claiming issues a **5-char passcode (領票碼)** shown once — the server stores only `HMAC-SHA256(PEPPER, key_hash|passcode)`.
+4. Ballot exists → 更改選票 (change). The voter must enter the passcode before current votes are revealed or overwritten (revision +1). A family can never obtain a second ballot.
+5. Results are readable only via the `tally` action with a secret admin token. The spreadsheet itself is owner-only.
+
+**Lost passcode**: the admin clears that row's `passcode_hash` cell in `Ballots`; the family's next vote issues a fresh passcode.
 
 ## Key scheme (spec)
 
@@ -37,7 +40,7 @@ printf 'hp-pre-v1|測試生|1' | shasum -a 256
 |---|---|
 | `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN`/`CLOSED`), `ADMIN_TOKEN_HASH` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
 | `Roster` | A: `family_id` (F01…), B: `display_name` (candidate label), C: `student_names` (comma-separated for twins), D: `student_numbers`, E: `key_hash` (H2 — filled by `adminRebuildHashes()`, never by hand), F: `eligible` (Y/N), G: `notes` |
-| `Ballots` | A: `key_hash`, B: `family_id`, C–F: `vote1..vote4`, G: `first_claimed_at`, H: `last_updated_at`, I: `revision` |
+| `Ballots` | A: `key_hash`, B: `family_id`, C–F: `vote1..vote4`, G: `first_claimed_at`, H: `last_updated_at`, I: `revision`, J: `passcode_hash` |
 | `AuditLog` | A: timestamp, B: action, C: key prefix (12 hex), D: result, E: detail |
 
 Header row required on every tab. The **PEPPER is NOT in the sheet** — it lives in Apps Script → Project Settings → Script Properties.
@@ -87,12 +90,14 @@ All requests: `POST` to the `/exec` URL with `Content-Type: text/plain;charset=u
 
 | Action | Request | Response |
 |---|---|---|
-| `check` | `{action, key}` | `{registered, hasBallot, electionOpen, title, candidates[], currentVotes?, revision?}` |
+| `check` | `{action, key, passcode?}` | `{registered, hasBallot, electionOpen, title, candidates[], passcodeRequired?, currentVotes?, revision?}` — with a ballot present, `currentVotes` is returned only with the correct passcode (or for legacy ballots without one) |
 | `getCandidates` | `{action, key}` | `{candidates[]}` |
-| `vote` | `{action, key, votes[4]}` | `{status: "claimed"\|"updated", revision}` |
+| `vote` | `{action, key, votes[4], passcode?}` | `{status: "claimed"\|"updated", revision, passcode?}` — `passcode` returned on claim (and on first update of a legacy ballot); required to update a passcode-protected ballot |
 | `tally` | `{action, adminToken}` | `{electionStatus, totalBallots, results[]}` |
 
-Errors: `BAD_REQUEST, UNKNOWN_STUDENT, ELECTION_CLOSED, INVALID_VOTES, UNAUTHORIZED, RATE_LIMITED, SERVER_ERROR`.
+Errors: `BAD_REQUEST, UNKNOWN_STUDENT, ELECTION_CLOSED, INVALID_VOTES, PASSCODE_WRONG, UNAUTHORIZED, RATE_LIMITED, SERVER_ERROR`.
+
+Passcode format: 5 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O/1/I/L); input is NFKC-normalized, whitespace-stripped, uppercased. Failed passcode attempts count toward the global rate-limit brake.
 
 ### Smoke test
 
@@ -104,7 +109,7 @@ curl -sL -H 'Content-Type: text/plain;charset=utf-8' \
 
 ## Threat model / accepted limitations
 
-- **Impersonation**: anyone who knows a student's name + number can claim or overwrite that family's ballot. Accepted at school scale. Mitigations: append-only `AuditLog`, visible revision counter (「第 N 次填寫」— a family seeing a revision they didn't make will report it), and families can re-submit until close.
+- **Impersonation**: anyone who knows a student's name + number can claim that family's ballot **first** — but once claimed, changing it requires the 5-char passcode issued at claim time, so a ballot cannot be silently overwritten by name+number knowledge alone. Residual risk: an attacker claiming before the real family does (the family then reports being unable to claim, and the admin investigates via `AuditLog`). Other mitigations: append-only `AuditLog`, visible revision counter (「第 N 次填寫」).
 - **Ballot secrecy from the administrator**: none — the sheet owner can map ballots to families. Inherent to "one family, changeable ballot".
 - **Sheet leak**: `Ballots`/`Roster.key_hash` store only peppered H2; correlation requires also compromising the Script Property.
 - **Rate limiting**: GAS cannot see client IPs; a global brake (30 failed lookups / 10 min → `RATE_LIMITED`) slows roster guessing. Same brake covers bad tally tokens.

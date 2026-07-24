@@ -92,6 +92,15 @@
         <h2 id="status-title" class="section-title mt-2">領取選票</h2>
         <p id="status-desc" class="text-sm opacity-70"></p>
 
+        <div id="passcode-box" class="mt-3 hidden w-full">
+          <div class="divider text-xs opacity-60">請輸入領票碼</div>
+          <p class="text-xs opacity-60">領票碼為首次投票時系統提供的 5 碼，需輸入才能查看與更改選票。</p>
+          <div class="mt-3 flex items-center justify-center gap-2">
+            <input type="text" id="passcode-input" class="input input-bordered passcode-input" maxlength="5" placeholder="ABCDE" autocomplete="off" autocapitalize="characters">
+            <button id="btn-verify-passcode" class="btn btn-primary">驗證</button>
+          </div>
+        </div>
+
         <div id="current-votes-box" class="mt-3 hidden w-full">
           <div class="divider text-xs opacity-60">目前圈選</div>
           <ul id="current-votes" class="current-votes"></ul>
@@ -122,10 +131,15 @@
         <div class="stamp stamp-success"><span id="done-stamp-text">投票成功</span></div>
         <h2 id="done-title" class="section-title mt-2">投票成功！</h2>
         <p id="done-desc" class="text-sm opacity-70"></p>
+        <div id="done-passcode-box" class="passcode-reveal mt-4 hidden w-full">
+          <p class="text-sm font-medium">您的領票碼</p>
+          <div id="done-passcode" class="passcode-display mt-2"></div>
+          <p class="mt-3 text-xs">請務必截圖或抄下此領票碼。<br>更改選票時必須輸入；遺失領票碼將無法更改選票。</p>
+        </div>
         <div class="divider text-xs opacity-60">您圈選的候選家庭</div>
         <ul id="done-votes" class="current-votes w-full"></ul>
         <span class="badge badge-outline mt-3" id="done-revision"></span>
-        <p class="mt-4 text-xs opacity-60">如需更改，請於投票截止前重新輸入學生資料，選擇「更改選票」。</p>
+        <p class="mt-4 text-xs opacity-60">如需更改，請於投票截止前重新輸入學生資料，選擇「更改選票」，並輸入領票碼。</p>
       </div>
     </section>
 

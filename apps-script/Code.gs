@@ -22,6 +22,11 @@ var KEY_RE = /^[0-9a-f]{64}$/;
 var RATE_LIMIT_MAX_FAILURES = 30;
 var RATE_LIMIT_WINDOW_SECONDS = 600;
 
+/* Passcode (領票碼): issued once at ballot claim; required to change votes.
+ * 5 chars from an alphabet without ambiguous glyphs (no 0/O/1/I/L). */
+var PASSCODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+var PASSCODE_LENGTH = 5;
+
 /* ---------------- entry points ---------------- */
 
 function doGet() {
@@ -73,8 +78,25 @@ function handleCheck(req) {
     candidates: listCandidates(),
   };
   if (ballot) {
-    res.currentVotes = ballot.votes;
-    res.revision = ballot.revision;
+    if (ballot.passcodeHash) {
+      var pc = normalizePasscode(req.passcode);
+      if (!pc) {
+        // Current votes stay hidden until the passcode is presented.
+        res.passcodeRequired = true;
+      } else if (passcodeHash(gate.h2, pc) === ballot.passcodeHash) {
+        res.passcodeOk = true;
+        res.currentVotes = ballot.votes;
+        res.revision = ballot.revision;
+      } else {
+        recordFailure();
+        audit('check', gate.h2, 'PASSCODE_WRONG', '');
+        return fail('PASSCODE_WRONG', '領票碼錯誤，請確認後再試。');
+      }
+    } else {
+      // Legacy ballot claimed before passcodes existed; next vote issues one.
+      res.currentVotes = ballot.votes;
+      res.revision = ballot.revision;
+    }
   }
   audit('check', gate.h2, 'OK', 'hasBallot=' + res.hasBallot);
   return jsonOut(res);
@@ -129,8 +151,20 @@ function handleVote(req) {
     var sheet = ss().getSheetByName(SHEET_BALLOTS);
     var now = new Date().toISOString();
     var existing = findBallot(gate.h2);
-    var status, revision;
+    var status, revision, newPasscode = null;
     if (existing) {
+      if (existing.passcodeHash) {
+        var pc = normalizePasscode(req.passcode);
+        if (!pc || passcodeHash(gate.h2, pc) !== existing.passcodeHash) {
+          recordFailure();
+          audit('vote', gate.h2, 'PASSCODE_WRONG', '');
+          return fail('PASSCODE_WRONG', '領票碼錯誤，無法更改選票。');
+        }
+      } else {
+        // Legacy ballot: issue a passcode on this update.
+        newPasscode = generatePasscode();
+        sheet.getRange(existing.row, 10).setValue(passcodeHash(gate.h2, newPasscode));
+      }
       revision = existing.revision + 1;
       sheet
         .getRange(existing.row, 3, 1, 4)
@@ -140,6 +174,7 @@ function handleVote(req) {
       status = 'updated';
     } else {
       revision = 1;
+      newPasscode = generatePasscode();
       sheet.appendRow([
         gate.h2,
         gate.family.familyId,
@@ -150,11 +185,14 @@ function handleVote(req) {
         now,
         now,
         revision,
+        passcodeHash(gate.h2, newPasscode),
       ]);
       status = 'claimed';
     }
     audit('vote', gate.h2, 'OK', status + ' rev=' + revision + ' votes=' + votes.join(','));
-    return jsonOut({ ok: true, status: status, revision: revision });
+    var res = { ok: true, status: status, revision: revision };
+    if (newPasscode) res.passcode = newPasscode;
+    return jsonOut(res);
   } finally {
     lock.releaseLock();
   }
@@ -277,6 +315,7 @@ function findBallot(h2) {
         row: r + 1,
         votes: [rows[r][2], rows[r][3], rows[r][4], rows[r][5]].map(String),
         revision: Number(rows[r][8]) || 1,
+        passcodeHash: rows[r][9] ? String(rows[r][9]) : '',
       };
     }
   }
@@ -295,6 +334,28 @@ function sha256Hex(str) {
   return bytesToHex(
     Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, str, Utilities.Charset.UTF_8)
   );
+}
+
+function normalizePasscode(raw) {
+  return String(raw || '').normalize('NFKC').replace(/\s+/g, '').toUpperCase();
+}
+
+function generatePasscode() {
+  var bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    Utilities.getUuid() + Utilities.getUuid()
+  );
+  var code = '';
+  for (var i = 0; i < PASSCODE_LENGTH; i++) {
+    code += PASSCODE_ALPHABET.charAt((bytes[i] & 0xff) % PASSCODE_ALPHABET.length);
+  }
+  return code;
+}
+
+function passcodeHash(h2, passcode) {
+  var pepper = PropertiesService.getScriptProperties().getProperty('PEPPER');
+  if (!pepper) throw new Error('PEPPER script property is not set');
+  return bytesToHex(Utilities.computeHmacSha256Signature(h2 + '|' + passcode, pepper));
 }
 
 function bytesToHex(bytes) {
@@ -409,13 +470,19 @@ function adminSetupSheets() {
         'first_claimed_at',
         'last_updated_at',
         'revision',
+        'passcode_hash',
       ],
     },
     { name: SHEET_AUDIT, headers: ['timestamp', 'action', 'key_prefix', 'result', 'detail'] },
   ];
   specs.forEach(function (spec) {
     var sheet = s.getSheetByName(spec.name) || s.insertSheet(spec.name);
-    if (!String(sheet.getRange(1, 1).getValue())) {
+    var current = sheet
+      .getRange(1, 1, 1, spec.headers.length)
+      .getValues()[0]
+      .map(String)
+      .join('|');
+    if (current !== spec.headers.join('|')) {
       sheet.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
       sheet.getRange(1, 1, 1, spec.headers.length).setFontWeight('bold');
     }

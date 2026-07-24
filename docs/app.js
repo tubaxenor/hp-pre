@@ -15,6 +15,8 @@
     revision: 0,
     electionOpen: false,
     selected: new Set(),
+    passcode: null,        // entered by voter (change) or issued by server (claim)
+    passcodeRequired: false,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -148,6 +150,8 @@
       state.currentVotes = res.currentVotes || [];
       state.revision = res.revision || 0;
       state.electionOpen = res.electionOpen;
+      state.passcode = null;
+      state.passcodeRequired = !!res.passcodeRequired;
       if (res.title) $("election-title").textContent = res.title;
       renderStatus();
       showScreen("status");
@@ -162,14 +166,18 @@
 
   function renderStatus() {
     const changing = state.hasBallot;
+    const locked = changing && state.passcodeRequired;
     $("stamp-text").textContent = changing ? "更改選票" : "領選票";
     $("status-title").textContent = changing ? "更改選票" : "領取選票";
     $("status-desc").textContent = changing
-      ? "此家庭已投過票。您可以重新圈選，送出後將覆蓋原選票。"
+      ? locked
+        ? "此家庭已投過票。請輸入領票碼以查看並更改選票。"
+        : "此家庭已投過票。您可以重新圈選，送出後將覆蓋原選票。"
       : "身分確認成功！此家庭尚未投票，請領取選票並圈選 4 位候選家庭。";
 
-    $("current-votes-box").classList.toggle("hidden", !changing);
-    if (changing) {
+    $("passcode-box").classList.toggle("hidden", !locked);
+    $("current-votes-box").classList.toggle("hidden", !changing || locked);
+    if (changing && !locked) {
       renderVoteList($("current-votes"), state.currentVotes);
       $("revision-badge").textContent = `第 ${state.revision} 次填寫`;
     }
@@ -180,9 +188,38 @@
       btn.disabled = true;
       showError("投票已截止，無法圈選或更改選票。");
     } else {
-      btn.disabled = false;
+      btn.disabled = locked;
     }
   }
+
+  $("btn-verify-passcode").addEventListener("click", async () => {
+    hideError();
+    const pc = $("passcode-input")
+      .value.normalize("NFKC")
+      .replace(/\s+/g, "")
+      .toUpperCase();
+    if (pc.length !== 5) {
+      showError("請輸入 5 碼領票碼。");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api({ action: "check", key: state.key, passcode: pc });
+      if (!res.ok) {
+        showError(res.message || "發生錯誤，請稍後再試。");
+        return;
+      }
+      state.passcode = pc;
+      state.passcodeRequired = false;
+      state.currentVotes = res.currentVotes || [];
+      state.revision = res.revision || 0;
+      renderStatus();
+    } catch (err) {
+      showError("連線失敗，請檢查網路後重試。");
+    } finally {
+      setLoading(false);
+    }
+  });
 
   $("btn-start-select").addEventListener("click", () => {
     hideError();
@@ -263,7 +300,9 @@
     setLoading(true);
     try {
       const votes = [...state.selected];
-      const res = await api({ action: "vote", key: state.key, votes });
+      const payload = { action: "vote", key: state.key, votes };
+      if (state.passcode) payload.passcode = state.passcode;
+      const res = await api(payload);
       if (!res.ok) {
         showError(res.message || "發生錯誤，請稍後再試。");
         updateSteps("select");
@@ -272,6 +311,9 @@
       state.hasBallot = true;
       state.currentVotes = votes;
       state.revision = res.revision;
+      if (res.passcode) state.passcode = res.passcode;
+      $("done-passcode-box").classList.toggle("hidden", !res.passcode);
+      if (res.passcode) $("done-passcode").textContent = res.passcode;
       const updated = res.status === "updated";
       $("done-stamp-text").textContent = updated ? "選票已更新" : "投票成功";
       $("done-title").textContent = updated ? "選票已更新！" : "投票成功！";
