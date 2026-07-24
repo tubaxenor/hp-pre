@@ -97,8 +97,14 @@
 
         <div id="claim-passcode-box" class="passcode-reveal mt-3 hidden w-full">
           <p class="text-sm font-medium">您的領票碼</p>
-          <div id="claim-passcode" class="passcode-display mt-2"></div>
-          <p class="mt-3 text-xs">請務必截圖或抄下此領票碼。<br>下次查看或更改選票時必須輸入；遺失將無法更改選票。</p>
+          <div class="passcode-row mt-2">
+            <div id="claim-passcode" class="passcode-display"></div>
+            <button type="button" class="passcode-copy" data-copy-target="claim-passcode" aria-label="複製領票碼">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span class="copy-label">複製</span>
+            </button>
+          </div>
+          <p class="mt-3 text-xs">請「複製」或「截圖」保存此領票碼；下次查看或更改選票時必須輸入。<br>如忘記領票碼，請聯絡 LINE ID：tubaxenor。</p>
         </div>
 
         <div id="passcode-box" class="mt-3 hidden w-full">
@@ -142,8 +148,14 @@
         <p id="done-desc" class="text-sm opacity-70"></p>
         <div id="done-passcode-box" class="passcode-reveal mt-4 hidden w-full">
           <p class="text-sm font-medium">您的領票碼</p>
-          <div id="done-passcode" class="passcode-display mt-2"></div>
-          <p class="mt-3 text-xs">請務必截圖或抄下此領票碼。<br>更改選票時必須輸入；遺失領票碼將無法更改選票。</p>
+          <div class="passcode-row mt-2">
+            <div id="done-passcode" class="passcode-display"></div>
+            <button type="button" class="passcode-copy" data-copy-target="done-passcode" aria-label="複製領票碼">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span class="copy-label">複製</span>
+            </button>
+          </div>
+          <p class="mt-3 text-xs">請「複製」或「截圖」保存此領票碼；更改選票時必須輸入。<br>如忘記領票碼，請聯絡 LINE ID：tubaxenor。</p>
         </div>
         <div class="divider text-xs opacity-60">您圈選的候選家庭</div>
         <ul id="done-votes" class="current-votes w-full"></ul>

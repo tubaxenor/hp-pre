@@ -348,6 +348,27 @@
     }
   });
 
+  // Copy-passcode buttons (claim + done screens).
+  document.querySelectorAll(".passcode-copy").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const code = $(btn.dataset.copyTarget).textContent.trim();
+      if (!code) return;
+      const label = btn.querySelector(".copy-label");
+      try {
+        await navigator.clipboard.writeText(code);
+        const prev = label.textContent;
+        label.textContent = "已複製";
+        btn.classList.add("copied");
+        setTimeout(() => {
+          label.textContent = prev;
+          btn.classList.remove("copied");
+        }, 1500);
+      } catch (err) {
+        label.textContent = "請長按複製";
+      }
+    });
+  });
+
   $("error-dismiss").addEventListener("click", hideError);
 
   showScreen("identity");
