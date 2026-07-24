@@ -90,6 +90,20 @@
 
   /* ---------- screen 1: identity ---------- */
 
+  // Pressing Enter in any text field triggers its screen's primary button.
+  function submitOnEnter(inputId, buttonId) {
+    $(inputId).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        $(buttonId).click();
+      }
+    });
+  }
+  ["name-1", "num-1", "name-2", "num-2"].forEach((id) =>
+    submitOnEnter(id, "btn-check")
+  );
+  submitOnEnter("passcode-input", "btn-verify-passcode");
+
   $("twins-toggle").addEventListener("change", (e) => {
     $("student-2").classList.toggle("hidden", !e.target.checked);
   });
