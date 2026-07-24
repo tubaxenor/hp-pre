@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW" data-theme="hppre">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>家長代表選舉</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <link href="style.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body>
+  <div class="paper-bg"></div>
+
+  <main class="mx-auto w-full max-w-xl px-4 pb-32 pt-6">
+
+    <!-- Document header -->
+    <header class="doc-header mb-6 text-center">
+      <div class="doc-rule"></div>
+      <h1 id="election-title" class="doc-title mt-5">家長代表選舉</h1>
+      <p class="doc-subtitle mt-1">每戶家庭一張選票 · 圈選四位候選家庭</p>
+      <div class="doc-rule-thin mt-5"></div>
+    </header>
+
+    <!-- Progress steps -->
+    <ul class="steps steps-horizontal mb-6 w-full text-xs" id="steps">
+      <li class="step step-primary" data-step="identity">身分確認</li>
+      <li class="step" data-step="select">圈選</li>
+      <li class="step" data-step="confirm">確認</li>
+      <li class="step" data-step="done">完成</li>
+    </ul>
+
+    <!-- Error banner -->
+    <div id="error-banner" class="alert alert-error mb-4 hidden" role="alert">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0 3.75h.01M4.5 19.5h15a1.5 1.5 0 001.3-2.25l-7.5-13a1.5 1.5 0 00-2.6 0l-7.5 13a1.5 1.5 0 001.3 2.25z"/>
+      </svg>
+      <span id="error-message"></span>
+      <button id="error-dismiss" class="btn btn-ghost btn-xs">關閉</button>
+    </div>
+
+    <!-- Screen 1: identity -->
+    <section id="screen-identity" class="screen card ballot-card">
+      <div class="card-body">
+        <h2 class="section-title">身分確認</h2>
+        <p class="text-sm opacity-70">請輸入貴子弟的姓名與學號，以領取或更改選票。資料僅用於產生選票識別碼，不會上傳姓名。</p>
+
+        <div class="mt-4 space-y-4">
+          <div id="student-1">
+            <div class="grid grid-cols-5 gap-3">
+              <label class="form-control col-span-3">
+                <span class="label-text mb-1 font-medium">學生姓名</span>
+                <input type="text" id="name-1" class="input input-bordered w-full" placeholder="例：王小明" autocomplete="off">
+              </label>
+              <label class="form-control col-span-2">
+                <span class="label-text mb-1 font-medium">學號</span>
+                <input type="text" id="num-1" class="input input-bordered w-full" placeholder="例：5" inputmode="numeric" autocomplete="off">
+              </label>
+            </div>
+          </div>
+
+          <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" id="twins-toggle" class="toggle toggle-primary">
+            <span class="label-text">本家庭有兩位學生（雙胞胎）</span>
+          </label>
+
+          <div id="student-2" class="hidden">
+            <div class="grid grid-cols-5 gap-3">
+              <label class="form-control col-span-3">
+                <span class="label-text mb-1 font-medium">第二位學生姓名</span>
+                <input type="text" id="name-2" class="input input-bordered w-full" placeholder="例：王小華" autocomplete="off">
+              </label>
+              <label class="form-control col-span-2">
+                <span class="label-text mb-1 font-medium">學號</span>
+                <input type="text" id="num-2" class="input input-bordered w-full" placeholder="例：6" inputmode="numeric" autocomplete="off">
+              </label>
+            </div>
+          </div>
+
+          <button id="btn-check" class="btn btn-primary btn-block btn-lg mt-2">確認身分</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen 2: ballot status -->
+    <section id="screen-status" class="screen card ballot-card hidden">
+      <div class="card-body items-center text-center">
+        <div id="stamp" class="stamp" aria-hidden="true"><span id="stamp-text">領選票</span></div>
+        <h2 id="status-title" class="section-title mt-2">領取選票</h2>
+        <p id="status-desc" class="text-sm opacity-70"></p>
+
+        <div id="current-votes-box" class="mt-3 hidden w-full">
+          <div class="divider text-xs opacity-60">目前圈選</div>
+          <ul id="current-votes" class="current-votes"></ul>
+          <div class="mt-2 text-center">
+            <span class="badge badge-outline" id="revision-badge"></span>
+          </div>
+        </div>
+
+        <button id="btn-start-select" class="btn btn-primary btn-block btn-lg mt-5">開始圈選</button>
+        <button id="btn-back-identity" class="btn btn-ghost btn-sm mt-1">重新輸入身分</button>
+      </div>
+    </section>
+
+    <!-- Screen 3: candidate selection -->
+    <section id="screen-select" class="screen hidden">
+      <div class="card ballot-card">
+        <div class="card-body">
+          <h2 class="section-title">圈選候選家庭</h2>
+          <p class="text-sm opacity-70">請圈選 <strong>4</strong> 位候選家庭。點選即圈選，再點一次可取消。</p>
+          <div id="candidate-grid" class="candidate-grid mt-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen 4: done -->
+    <section id="screen-done" class="screen card ballot-card hidden">
+      <div class="card-body items-center text-center">
+        <div class="stamp stamp-success"><span id="done-stamp-text">投票成功</span></div>
+        <h2 id="done-title" class="section-title mt-2">投票成功！</h2>
+        <p id="done-desc" class="text-sm opacity-70"></p>
+        <div class="divider text-xs opacity-60">您圈選的候選家庭</div>
+        <ul id="done-votes" class="current-votes w-full"></ul>
+        <span class="badge badge-outline mt-3" id="done-revision"></span>
+        <p class="mt-4 text-xs opacity-60">如需更改，請於投票截止前重新輸入學生資料，選擇「更改選票」。</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Sticky selection bar (screen 3 only) -->
+  <div id="select-bar" class="select-bar hidden">
+    <div class="mx-auto flex w-full max-w-xl items-center justify-between gap-3 px-4 py-3">
+      <div class="select-count"><span id="count-now">0</span><span class="opacity-50"> / 4</span><span class="ml-2 text-sm font-normal opacity-70">已圈選</span></div>
+      <button id="btn-submit" class="btn btn-primary btn-wide" disabled>送出選票</button>
+    </div>
+  </div>
+
+  <!-- Confirmation modal -->
+  <dialog id="confirm-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box ballot-card">
+      <h3 class="section-title">確認選票內容</h3>
+      <p class="mt-1 text-sm opacity-70">您圈選了以下 4 位候選家庭：</p>
+      <ul id="confirm-votes" class="current-votes mt-3"></ul>
+      <p class="mt-4 text-xs opacity-60">送出後，仍可在投票截止前更改選票。</p>
+      <div class="modal-action">
+        <button id="btn-confirm-cancel" class="btn btn-ghost">返回修改</button>
+        <button id="btn-confirm-submit" class="btn btn-primary">確認送出</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>關閉</button></form>
+  </dialog>
+
+  <!-- Loading overlay -->
+  <div id="loading" class="loading-overlay hidden">
+    <span class="loading loading-spinner loading-lg text-primary"></span>
+    <p class="mt-3 text-sm">處理中，請稍候…</p>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
