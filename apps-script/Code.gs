@@ -378,6 +378,63 @@ function fail(code, message) {
 /* ---------------- admin: run from the GAS editor ---------------- */
 
 /**
+ * Creates the 4 tabs with header rows and Config defaults.
+ * Safe to re-run: existing tabs/values are left untouched.
+ */
+function adminSetupSheets() {
+  var s = ss();
+  var specs = [
+    { name: SHEET_CONFIG, headers: ['key', 'value'] },
+    {
+      name: SHEET_ROSTER,
+      headers: [
+        'family_id',
+        'display_name',
+        'student_names',
+        'student_numbers',
+        'key_hash',
+        'eligible',
+        'notes',
+      ],
+    },
+    {
+      name: SHEET_BALLOTS,
+      headers: [
+        'key_hash',
+        'family_id',
+        'vote1',
+        'vote2',
+        'vote3',
+        'vote4',
+        'first_claimed_at',
+        'last_updated_at',
+        'revision',
+      ],
+    },
+    { name: SHEET_AUDIT, headers: ['timestamp', 'action', 'key_prefix', 'result', 'detail'] },
+  ];
+  specs.forEach(function (spec) {
+    var sheet = s.getSheetByName(spec.name) || s.insertSheet(spec.name);
+    if (!String(sheet.getRange(1, 1).getValue())) {
+      sheet.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
+      sheet.getRange(1, 1, 1, spec.headers.length).setFontWeight('bold');
+    }
+  });
+
+  var config = readConfig();
+  var defaults = [
+    ['ELECTION_STATUS', 'CLOSED'],
+    ['ADMIN_TOKEN_HASH', ''],
+    ['VOTES_REQUIRED', '4'],
+    ['ELECTION_TITLE', '家長代表選舉'],
+  ];
+  var configSheet = s.getSheetByName(SHEET_CONFIG);
+  defaults.forEach(function (kv) {
+    if (!(kv[0] in config)) configSheet.appendRow(kv);
+  });
+}
+
+/**
  * Reads Roster student_names (col C) + student_numbers (col D),
  * applies the reference normalization, and writes H2 into key_hash (col E).
  * Run once after editing the roster. Names may be separated by , or 、or ，.
