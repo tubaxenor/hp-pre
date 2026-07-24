@@ -1,0 +1,6 @@
+@import "tailwindcss" source(none);
+@plugin "daisyui";
+
+/* Scan the site so only the classes actually used get emitted. */
+@source "../docs/index.html";
+@source "../docs/app.js";
