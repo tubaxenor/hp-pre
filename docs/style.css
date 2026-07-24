@@ -225,6 +225,19 @@ body {
 }
 .select-count { font-family: var(--serif); font-weight: 900; font-size: 1.3rem; color: var(--seal); }
 
+/* ---- Inputs: single thin focus ring (kill daisyUI's double ring) ---- */
+.input:focus,
+.input:focus-within {
+  outline: none;
+  box-shadow: none;
+  border-color: oklch(56% 0.17 42 / 0.55);
+}
+.toggle:focus-visible,
+.checkbox:focus-visible {
+  outline: 1px solid oklch(56% 0.17 42 / 0.45);
+  outline-offset: 1px;
+}
+
 /* ---- Passcode (領票碼) ---- */
 .passcode-input {
   width: 9rem;
