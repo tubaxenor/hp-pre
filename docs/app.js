@@ -387,6 +387,36 @@
 
   /* ---------- results screen (ELECTION_STATUS = ENDED) ---------- */
 
+  // Top 4 candidates are elected (正取) representatives; the next 2 are
+  // alternates (備取) who step in if an elected family declines.
+  const ELECTED_COUNT = 4;
+  const ALTERNATE_COUNT = 2;
+
+  function resultRow(r) {
+    const li = document.createElement("li");
+    li.className = "result-row result-" + r.tier;
+
+    const rankEl = document.createElement("span");
+    rankEl.className = "result-rank";
+    rankEl.textContent = r.rank;
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "result-name";
+    nameEl.textContent = r.name;
+
+    const tierEl = document.createElement("span");
+    tierEl.className = "result-tier";
+    tierEl.textContent =
+      r.tier === "elected" ? "正取" : r.tier === "alternate" ? "備取" : "";
+
+    const countEl = document.createElement("span");
+    countEl.className = "result-count";
+    countEl.textContent = r.count + " 票";
+
+    li.append(rankEl, nameEl, tierEl, countEl);
+    return li;
+  }
+
   // Renders the public results and blocks every voting action: the steps
   // and all voting screens stay hidden, so there is no path back to voting.
   function renderResults(data) {
@@ -399,38 +429,68 @@
 
     const list = $("result-list");
     list.innerHTML = "";
+    const noteEl = $("result-tie-note");
+    noteEl.innerHTML = "";
+    noteEl.classList.add("hidden");
+
     const results = data.results || [];
-    // Standard competition ranking: equal counts share a rank (1,1,3…).
-    let rank = 0;
-    let prevCount = null;
-    results.forEach((r, i) => {
-      if (r.count !== prevCount) {
-        rank = i + 1;
-        prevCount = r.count;
-      }
-      const li = document.createElement("li");
-      li.className = "result-row" + (rank === 1 ? " result-top" : "");
-
-      const rankEl = document.createElement("span");
-      rankEl.className = "result-rank";
-      rankEl.textContent = rank;
-
-      const nameEl = document.createElement("span");
-      nameEl.className = "result-name";
-      nameEl.textContent = r.name;
-
-      const countEl = document.createElement("span");
-      countEl.className = "result-count";
-      countEl.textContent = r.count + " 票";
-
-      li.append(rankEl, nameEl, countEl);
-      list.appendChild(li);
-    });
     if (!results.length) {
       const li = document.createElement("li");
       li.className = "result-empty";
       li.textContent = "尚無有效選票。";
       list.appendChild(li);
+      $("screen-results").classList.remove("hidden");
+      window.scrollTo({ top: 0 });
+      return;
+    }
+
+    // Standard competition ranking (equal counts share a rank: 1,1,3…),
+    // plus a tier by list position: first 4 = 正取, next 2 = 備取.
+    let rank = 0;
+    let prevCount = null;
+    const rows = results.map((r, i) => {
+      if (r.count !== prevCount) {
+        rank = i + 1;
+        prevCount = r.count;
+      }
+      let tier = "other";
+      if (i < ELECTED_COUNT) tier = "elected";
+      else if (i < ELECTED_COUNT + ALTERNATE_COUNT) tier = "alternate";
+      return { name: r.name, count: r.count, rank: rank, tier: tier };
+    });
+
+    const groups = [
+      { tier: "elected", label: "正取 · 當選 " + ELECTED_COUNT + " 名" },
+      { tier: "alternate", label: "備取 · 候補 " + ALTERNATE_COUNT + " 名" },
+      { tier: "other", label: "其他候選家庭" },
+    ];
+    groups.forEach((g) => {
+      const groupRows = rows.filter((r) => r.tier === g.tier);
+      if (!groupRows.length) return;
+      const header = document.createElement("li");
+      header.className = "result-group result-group-" + g.tier;
+      header.textContent = g.label;
+      list.appendChild(header);
+      groupRows.forEach((r) => list.appendChild(resultRow(r)));
+    });
+
+    // A tie straddling a cutoff can't be broken by counting alone — flag it
+    // so the admin resolves it by draw (抽籤) rather than silent truncation.
+    const notes = [];
+    const boundary = (n, what) => {
+      if (results.length > n && results[n - 1].count === results[n].count) {
+        notes.push(what + "分界（第 " + n + " 名）出現同票，須以抽籤決定。");
+      }
+    };
+    boundary(ELECTED_COUNT, "正取與備取");
+    boundary(ELECTED_COUNT + ALTERNATE_COUNT, "備取名單");
+    if (notes.length) {
+      notes.forEach((n) => {
+        const p = document.createElement("p");
+        p.textContent = "※ " + n;
+        noteEl.appendChild(p);
+      });
+      noteEl.classList.remove("hidden");
     }
 
     $("screen-results").classList.remove("hidden");
