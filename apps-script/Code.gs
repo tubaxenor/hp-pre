@@ -49,6 +49,8 @@ function doPost(e) {
         return handleGetCandidates(req);
       case 'vote':
         return handleVote(req);
+      case 'results':
+        return handleResults(req);
       case 'tally':
         return handleTally(req);
       default:
@@ -254,6 +256,48 @@ function handleTally(req) {
     return fail('UNAUTHORIZED', '管理密鑰錯誤。');
   }
 
+  var tally = computeTally();
+  audit('tally', '', 'OK', 'ballots=' + tally.totalBallots);
+  return jsonOut({
+    ok: true,
+    electionStatus: config.ELECTION_STATUS,
+    totalBallots: tally.totalBallots,
+    results: tally.results,
+  });
+}
+
+/**
+ * Public results for the site: no admin token, but reveals counts ONLY
+ * when the election is ENDED. Any other status returns ended:false with
+ * no counts, so nothing leaks before the election is over. This is the
+ * only path that exposes results without the token, and it is gated on
+ * ENDED — matching the "no one sees results early" rule.
+ */
+function handleResults(req) {
+  var config = readConfig();
+  var status = config.ELECTION_STATUS;
+  var title = config.ELECTION_TITLE || '家長代表選舉';
+  if (status !== 'ENDED') {
+    return jsonOut({ ok: true, ended: false, electionStatus: status, title: title });
+  }
+  var tally = computeTally();
+  audit('results', '', 'OK', 'ballots=' + tally.totalBallots);
+  return jsonOut({
+    ok: true,
+    ended: true,
+    electionStatus: status,
+    title: title,
+    totalBallots: tally.totalBallots,
+    results: tally.results,
+  });
+}
+
+/**
+ * Counts votes across vote1..vote4 for every ballot that actually voted
+ * (non-empty vote1). Returns { totalBallots, results[] } sorted high→low.
+ * Shared by tally (token-gated) and results (ENDED-only, public).
+ */
+function computeTally() {
   var counts = {};
   var ballots = ss().getSheetByName(SHEET_BALLOTS).getDataRange().getValues();
   var totalBallots = 0;
@@ -273,14 +317,7 @@ function handleTally(req) {
       return { id: id, name: names[id] || id, count: counts[id] };
     })
     .sort(function (a, b) { return b.count - a.count; });
-
-  audit('tally', '', 'OK', 'ballots=' + totalBallots);
-  return jsonOut({
-    ok: true,
-    electionStatus: config.ELECTION_STATUS,
-    totalBallots: totalBallots,
-    results: results,
-  });
+  return { totalBallots: totalBallots, results: results };
 }
 
 /* ---------------- shared gate: key format → rate limit → roster ---------------- */

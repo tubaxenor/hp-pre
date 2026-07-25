@@ -12,7 +12,7 @@ Static voting site for a class parent-representative election.
 2. The server computes `H2 = HMAC-SHA256(PEPPER, H1)` and looks it up in the roster. Valid key → returns candidates and ballot state.
 3. First successful identity check **claims the ballot immediately**: a Ballots row is created (votes empty, revision 0) and a **5-char passcode (領票碼)** is issued and shown once with a save-it warning — the server stores only `HMAC-SHA256(PEPPER, key_hash|passcode)`.
 4. Every later visit (and every vote) requires the passcode before the voted/unvoted state or current votes are revealed or overwritten. First actual vote = revision 1 (領選票); overwrites increment (更改選票). A family can never obtain a second ballot; tally counts only rows with votes.
-5. Results are readable only via the `tally` action with a secret admin token. The spreadsheet itself is owner-only.
+5. While voting is OPEN/CLOSED, results are readable only via the `tally` action with a secret admin token, and the spreadsheet itself is owner-only. When the admin sets `ELECTION_STATUS = ENDED`, the site publishes the final ranked results to any visitor (token-free `results` action, gated on `ENDED`) and blocks all further voting.
 
 **Lost passcode**: the admin clears that row's `passcode_hash` cell in `Ballots`; the family's next vote issues a fresh passcode.
 
@@ -82,7 +82,7 @@ Put the `/exec` URL into `docs/config.js` → commit → push. Pages redeploys a
 
 - Open: set `Config.ELECTION_STATUS = OPEN`, distribute the site URL.
 - Close (pause): set `CLOSED`. Votes are rejected; `check` still works; results stay hidden.
-- End: set `ENDED`. Votes rejected (same as CLOSED) **and** the `結果` tab reveals the ranked tally.
+- End: set `ENDED`. Votes rejected (same as CLOSED); the `結果` tab reveals the ranked tally **and** the public site (github.io) shows the ranked results to any visitor and blocks all voting (via the token-free `results` action, which returns counts only when `ENDED`).
 - Tally: `POST {"action":"tally","adminToken":"<token>"}` to the `/exec` URL (works while OPEN too — turnout monitoring).
 - Archive: File → Make a copy of the spreadsheet.
 
@@ -95,7 +95,8 @@ All requests: `POST` to the `/exec` URL with `Content-Type: text/plain;charset=u
 | `check` | `{action, key, passcode?}` | `{registered, hasBallot, hasVoted?, electionOpen, title, candidates[], passcode?, passcodeRequired?, currentVotes?, revision?}` — first check while OPEN claims the ballot and returns `passcode` once; later checks return `passcodeRequired` until the correct passcode is presented, which unlocks `hasVoted`/`currentVotes` |
 | `getCandidates` | `{action, key}` | `{candidates[]}` |
 | `vote` | `{action, key, votes[4], passcode}` | `{status: "claimed"\|"updated", revision}` — `claimed` on the first vote of a claimed ballot; passcode required whenever the ballot has one |
-| `tally` | `{action, adminToken}` | `{electionStatus, totalBallots, results[]}` |
+| `results` | `{action}` | `{ended, electionStatus, title, totalBallots?, results?}` — **no token**. Returns `ended:false` and **no counts** unless `ELECTION_STATUS = ENDED`; only then does it include `totalBallots`/`results`. The site calls this on load: when `ended`, it shows the ranked results and blocks all voting. |
+| `tally` | `{action, adminToken}` | `{electionStatus, totalBallots, results[]}` — token-gated, works in any state (turnout monitoring). |
 
 Errors: `BAD_REQUEST, UNKNOWN_STUDENT, ELECTION_CLOSED, INVALID_VOTES, PASSCODE_WRONG, UNAUTHORIZED, RATE_LIMITED, SERVER_ERROR`.
 
@@ -113,6 +114,7 @@ curl -sL -H 'Content-Type: text/plain;charset=utf-8' \
 
 - **Impersonation**: anyone who knows a student's name + number can claim that family's ballot **first** — but once claimed, changing it requires the 5-char passcode issued at claim time, so a ballot cannot be silently overwritten by name+number knowledge alone. Residual risk: an attacker claiming before the real family does (the family then reports being unable to claim, and the admin investigates via `AuditLog`). Other mitigations: append-only `AuditLog`, visible revision counter (「第 N 次填寫」).
 - **Ballot secrecy from the administrator**: none — the sheet owner can map ballots to families. Inherent to "one family, changeable ballot".
+- **Result disclosure**: intentional once `ENDED`. Candidate names + per-candidate counts + turnout become public to anyone with the site URL. Before `ENDED`, the `results` action returns no counts, so nothing leaks early. Individual ballots are never exposed by any public action.
 - **Sheet leak**: `Ballots`/`Roster.key_hash` store only peppered H2; correlation requires also compromising the Script Property.
 - **Rate limiting**: GAS cannot see client IPs; a global brake (30 failed lookups / 10 min → `RATE_LIMITED`) slows roster guessing. Same brake covers bad tally tokens.
 - **Out of scope**: CAPTCHA, per-IP limits, DoS beyond GAS's own quotas, insiders who know roster data.

@@ -385,5 +385,77 @@
 
   $("error-dismiss").addEventListener("click", hideError);
 
-  showScreen("identity");
+  /* ---------- results screen (ELECTION_STATUS = ENDED) ---------- */
+
+  // Renders the public results and blocks every voting action: the steps
+  // and all voting screens stay hidden, so there is no path back to voting.
+  function renderResults(data) {
+    $("steps").classList.add("hidden");
+    SCREENS.forEach((s) => $("screen-" + s).classList.add("hidden"));
+    $("select-bar").classList.add("hidden");
+    hideError();
+    if (data.title) $("election-title").textContent = data.title;
+    $("result-turnout-count").textContent = data.totalBallots || 0;
+
+    const list = $("result-list");
+    list.innerHTML = "";
+    const results = data.results || [];
+    // Standard competition ranking: equal counts share a rank (1,1,3…).
+    let rank = 0;
+    let prevCount = null;
+    results.forEach((r, i) => {
+      if (r.count !== prevCount) {
+        rank = i + 1;
+        prevCount = r.count;
+      }
+      const li = document.createElement("li");
+      li.className = "result-row" + (rank === 1 ? " result-top" : "");
+
+      const rankEl = document.createElement("span");
+      rankEl.className = "result-rank";
+      rankEl.textContent = rank;
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "result-name";
+      nameEl.textContent = r.name;
+
+      const countEl = document.createElement("span");
+      countEl.className = "result-count";
+      countEl.textContent = r.count + " 票";
+
+      li.append(rankEl, nameEl, countEl);
+      list.appendChild(li);
+    });
+    if (!results.length) {
+      const li = document.createElement("li");
+      li.className = "result-empty";
+      li.textContent = "尚無有效選票。";
+      list.appendChild(li);
+    }
+
+    $("screen-results").classList.remove("hidden");
+    window.scrollTo({ top: 0 });
+  }
+
+  // On load, ask the server whether the election has ended. If so, show
+  // results only. Otherwise (or if the probe fails) fall into normal voting;
+  // the server still rejects votes whenever the status is not OPEN.
+  async function init() {
+    setLoading(true);
+    try {
+      const res = await api({ action: "results" });
+      if (res && res.ok && res.ended) {
+        renderResults(res);
+        return;
+      }
+      if (res && res.ok && res.title) $("election-title").textContent = res.title;
+    } catch (err) {
+      // Ignore; fall through to the identity screen.
+    } finally {
+      setLoading(false);
+    }
+    showScreen("identity");
+  }
+
+  init();
 })();

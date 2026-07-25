@@ -164,6 +164,21 @@
       </div>
     </section>
 
+    <!-- Screen: results (shown only when ELECTION_STATUS = ENDED) -->
+    <section id="screen-results" class="screen card ballot-card hidden">
+      <div class="card-body items-center text-center">
+        <div class="stamp stamp-result" aria-hidden="true"><span>開票<br>結果</span></div>
+        <h2 class="section-title mt-2">投票結果</h2>
+        <p class="text-sm opacity-70">本次選舉已結束，感謝每一戶家庭的參與。</p>
+        <div class="result-turnout mt-3">
+          <span class="opacity-70">投票戶數</span>
+          <strong id="result-turnout-count">0</strong>
+        </div>
+        <ol id="result-list" class="result-list mt-4 w-full"></ol>
+        <p class="mt-4 text-xs opacity-50">得票數相同者並列同一名次。</p>
+      </div>
+    </section>
+
     <footer class="mt-10 text-center text-xs opacity-50">
       Powered by Claude Fable · © 2026 Xenor Chang. All rights reserved.
     </footer>
