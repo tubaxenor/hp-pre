@@ -456,10 +456,10 @@
       return { name: r.name, count: r.count, rank: rank, tier: tier };
     });
 
+    // Only the elected (正取) and alternate (備取) families are shown.
     const groups = [
       { tier: "elected", label: "正取 · 當選 " + ELECTED_COUNT + " 名" },
       { tier: "alternate", label: "備取 · 候補 " + ALTERNATE_COUNT + " 名" },
-      { tier: "other", label: "其他候選家庭" },
     ];
     groups.forEach((g) => {
       const groupRows = rows.filter((r) => r.tier === g.tier);
