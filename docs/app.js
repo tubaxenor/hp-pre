@@ -429,9 +429,6 @@
 
     const list = $("result-list");
     list.innerHTML = "";
-    const noteEl = $("result-tie-note");
-    noteEl.innerHTML = "";
-    noteEl.classList.add("hidden");
 
     const results = data.results || [];
     if (!results.length) {
@@ -473,25 +470,6 @@
       list.appendChild(header);
       groupRows.forEach((r) => list.appendChild(resultRow(r)));
     });
-
-    // A tie straddling a cutoff can't be broken by counting alone — flag it
-    // so the admin resolves it by draw (抽籤) rather than silent truncation.
-    const notes = [];
-    const boundary = (n, what) => {
-      if (results.length > n && results[n - 1].count === results[n].count) {
-        notes.push(what + "分界（第 " + n + " 名）出現同票，須以抽籤決定。");
-      }
-    };
-    boundary(ELECTED_COUNT, "正取與備取");
-    boundary(ELECTED_COUNT + ALTERNATE_COUNT, "備取名單");
-    if (notes.length) {
-      notes.forEach((n) => {
-        const p = document.createElement("p");
-        p.textContent = "※ " + n;
-        noteEl.appendChild(p);
-      });
-      noteEl.classList.remove("hidden");
-    }
 
     $("screen-results").classList.remove("hidden");
     window.scrollTo({ top: 0 });

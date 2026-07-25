@@ -403,16 +403,6 @@ body {
 }
 .result-other { opacity: 0.85; }
 
-.result-tie-note {
-  border: 1px solid var(--color-warning);
-  background: oklch(75% 0.14 80 / 0.12);
-  border-radius: 0.45rem;
-  padding: 0.6rem 0.8rem;
-  text-align: left;
-  font-size: 0.8rem;
-  color: oklch(35% 0.05 60);
-}
-.result-tie-note p { margin: 0.15rem 0; }
 .result-empty { opacity: 0.6; padding: 0.6rem; list-style: none; }
 
 /* ---- Loading overlay ---- */
