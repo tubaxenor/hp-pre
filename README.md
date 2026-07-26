@@ -76,12 +76,12 @@ printf '%s' "<token>" | shasum -a 256   # → Config.SALT
 
 ### 5. Wire frontend
 
-Put the `/exec` URL into `docs/config.js` → commit → push. Pages redeploys automatically.
+Put the `/exec` URL into `docs/config.js` (also set `VOTE_WINDOW`, the open-time text shown on the "not started" screen) → commit → push. Pages redeploys automatically.
 
 ### 6. Go live / close
 
 - Open: set `Config.ELECTION_STATUS = OPEN`, distribute the site URL.
-- Close (pause): set `CLOSED`. Votes are rejected; `check` still works; results stay hidden.
+- Not yet open: set `CLOSED`. The site shows a **「投票尚未開始」** notice with the open window (from `VOTE_WINDOW` in `docs/config.js`) and offers no identity form; the server never claims a ballot or accepts a vote while status ≠ OPEN.
 - End: set `ENDED`. Votes rejected (same as CLOSED); the `結果` tab reveals the ranked tally **and** the public site (github.io) shows the ranked results to any visitor and blocks all voting (via the token-free `results` action, which returns counts only when `ENDED`).
 - Tally: `POST {"action":"tally","adminToken":"<token>"}` to the `/exec` URL (works while OPEN too — turnout monitoring).
 - Archive: File → Make a copy of the spreadsheet.

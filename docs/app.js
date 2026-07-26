@@ -475,18 +475,54 @@
     window.scrollTo({ top: 0 });
   }
 
-  // On load, ask the server whether the election has ended. If so, show
-  // results only. Otherwise (or if the probe fails) fall into normal voting;
-  // the server still rejects votes whenever the status is not OPEN.
+  // Not-yet-open screen: shown while the election is CLOSED. Blocks every
+  // voting action (steps + all voting screens stay hidden) and announces the
+  // open window; the server also never claims a ballot unless status = OPEN.
+  function renderNotOpen() {
+    $("steps").classList.add("hidden");
+    SCREENS.forEach((s) => $("screen-" + s).classList.add("hidden"));
+    $("select-bar").classList.add("hidden");
+    hideError();
+
+    const win = (window.APP_CONFIG && window.APP_CONFIG.VOTE_WINDOW) || "";
+    const range = $("vote-window-range");
+    range.innerHTML = "";
+    const parts = win.split("～");
+    if (parts.length === 2) {
+      range.append(document.createTextNode(parts[0].trim()));
+      range.appendChild(document.createElement("br"));
+      const sep = document.createElement("span");
+      sep.className = "vote-window-sep";
+      sep.textContent = "～";
+      range.appendChild(sep);
+      range.appendChild(document.createElement("br"));
+      range.append(document.createTextNode(parts[1].trim()));
+    } else {
+      range.textContent = win;
+    }
+    $("vote-window-box").classList.toggle("hidden", !win);
+
+    $("screen-notopen").classList.remove("hidden");
+    window.scrollTo({ top: 0 });
+  }
+
+  // On load, ask the server for the election state. ENDED → results only;
+  // anything other than OPEN (i.e. CLOSED) → "not started" notice; OPEN →
+  // normal voting. On a probe failure, fall through to identity — the server
+  // still rejects claims/votes whenever the status is not OPEN.
   async function init() {
     setLoading(true);
     try {
       const res = await api({ action: "results" });
+      if (res && res.ok && res.title) $("election-title").textContent = res.title;
       if (res && res.ok && res.ended) {
         renderResults(res);
         return;
       }
-      if (res && res.ok && res.title) $("election-title").textContent = res.title;
+      if (res && res.ok && res.electionStatus && res.electionStatus !== "OPEN") {
+        renderNotOpen();
+        return;
+      }
     } catch (err) {
       // Ignore; fall through to the identity screen.
     } finally {

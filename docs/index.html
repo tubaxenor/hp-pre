@@ -164,6 +164,19 @@
       </div>
     </section>
 
+    <!-- Screen: not started yet (shown when ELECTION_STATUS = CLOSED) -->
+    <section id="screen-notopen" class="screen card ballot-card hidden">
+      <div class="card-body items-center text-center">
+        <div class="stamp stamp-pending" aria-hidden="true"><span>尚未<br>開始</span></div>
+        <h2 class="section-title mt-2">投票尚未開始</h2>
+        <p class="text-sm opacity-70">本次選舉尚未開始，請於下列開放時間內前來領取並圈選選票。</p>
+        <div id="vote-window-box" class="vote-window mt-4 hidden">
+          <p class="vote-window-label">投票開放時間</p>
+          <p id="vote-window-range" class="vote-window-range"></p>
+        </div>
+      </div>
+    </section>
+
     <!-- Screen: results (shown only when ELECTION_STATUS = ENDED) -->
     <section id="screen-results" class="screen card ballot-card hidden">
       <div class="card-body items-center text-center">
