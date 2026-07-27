@@ -25,6 +25,12 @@
 
   async function computeKey(canonical) {
     const subtle = (root.crypto || {}).subtle;
+    if (!subtle) {
+      // No Web Crypto: insecure context or an unsupported (e.g. old in-app) browser.
+      const e = new Error("crypto.subtle unavailable");
+      e.name = "CryptoUnavailable";
+      throw e;
+    }
     const buf = await subtle.digest("SHA-256", new TextEncoder().encode(canonical));
     return [...new Uint8Array(buf)]
       .map((b) => b.toString(16).padStart(2, "0"))

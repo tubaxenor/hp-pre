@@ -6,6 +6,9 @@
   "use strict";
 
   const VOTES_REQUIRED = 4;
+  const PASSCODE_LENGTH = 5;
+  const REQUEST_TIMEOUT_MS = 30000;
+  const REQUEST_MAX_ATTEMPTS = 2; // initial attempt + one retry
 
   const state = {
     key: null,          // H1 (64-hex), the only identity value sent to the server
@@ -30,15 +33,31 @@
 
   /* ---------- API client ---------- */
 
+  // Each attempt is capped at REQUEST_TIMEOUT_MS and retried once. All server
+  // actions are idempotent (claim and vote are keyed by identity), so a repeat
+  // after a lost response is safe.
   async function api(payload) {
-    const res = await fetch(window.APP_CONFIG.GAS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload),
-      redirect: "follow",
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+    let lastErr;
+    for (let attempt = 1; attempt <= REQUEST_MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch(window.APP_CONFIG.GAS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload),
+          redirect: "follow",
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return await res.json();
+      } catch (err) {
+        lastErr = err;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastErr;
   }
 
   /* ---------- UI helpers ---------- */
@@ -50,6 +69,14 @@
     $("select-bar").classList.toggle("hidden", name !== "select");
     updateSteps(name);
     window.scrollTo({ top: 0 });
+  }
+
+  // Hide the whole voting UI (steps + all voting screens + selection bar).
+  // Used by the terminal screens (results / not-open) that block voting.
+  function hideVotingUI() {
+    $("steps").classList.add("hidden");
+    SCREENS.forEach((s) => $("screen-" + s).classList.add("hidden"));
+    $("select-bar").classList.add("hidden");
   }
 
   function updateSteps(name) {
@@ -164,7 +191,11 @@
       renderStatus();
       showScreen("status");
     } catch (err) {
-      showError("連線失敗，請檢查網路後重試。");
+      if (err && err.name === "CryptoUnavailable") {
+        showError("此瀏覽器不支援安全加密功能，請改用 Safari 或 Chrome 開啟本頁。");
+      } else {
+        showError("連線失敗，請檢查網路後重試。");
+      }
     } finally {
       setLoading(false);
     }
@@ -225,8 +256,8 @@
       .value.normalize("NFKC")
       .replace(/\s+/g, "")
       .toUpperCase();
-    if (pc.length !== 5) {
-      showError("請輸入 5 碼領票碼。");
+    if (pc.length !== PASSCODE_LENGTH) {
+      showError(`請輸入 ${PASSCODE_LENGTH} 碼領票碼。`);
       return;
     }
     setLoading(true);
@@ -431,9 +462,7 @@
   // Renders the public results and blocks every voting action: the steps
   // and all voting screens stay hidden, so there is no path back to voting.
   function renderResults(data) {
-    $("steps").classList.add("hidden");
-    SCREENS.forEach((s) => $("screen-" + s).classList.add("hidden"));
-    $("select-bar").classList.add("hidden");
+    hideVotingUI();
     hideError();
     if (data.title) $("election-title").textContent = data.title;
     $("result-turnout-count").textContent = data.totalBallots || 0;
@@ -447,40 +476,37 @@
       li.className = "result-empty";
       li.textContent = "尚無有效選票。";
       list.appendChild(li);
-      $("screen-results").classList.remove("hidden");
-      window.scrollTo({ top: 0 });
-      return;
+    } else {
+      // Standard competition ranking (equal counts share a rank: 1,1,3…),
+      // plus a tier by list position: first 4 = 正取, next 2 = 備取.
+      let rank = 0;
+      let prevCount = null;
+      const rows = results.map((r, i) => {
+        if (r.count !== prevCount) {
+          rank = i + 1;
+          prevCount = r.count;
+        }
+        let tier = "other";
+        if (i < ELECTED_COUNT) tier = "elected";
+        else if (i < ELECTED_COUNT + ALTERNATE_COUNT) tier = "alternate";
+        return { name: r.name, count: r.count, rank: rank, tier: tier };
+      });
+
+      // Only the elected (正取) and alternate (備取) families are shown.
+      const groups = [
+        { tier: "elected", label: "正取 · 當選 " + ELECTED_COUNT + " 名" },
+        { tier: "alternate", label: "備取 · 候補 " + ALTERNATE_COUNT + " 名" },
+      ];
+      groups.forEach((g) => {
+        const groupRows = rows.filter((r) => r.tier === g.tier);
+        if (!groupRows.length) return;
+        const header = document.createElement("li");
+        header.className = "result-group result-group-" + g.tier;
+        header.textContent = g.label;
+        list.appendChild(header);
+        groupRows.forEach((r) => list.appendChild(resultRow(r)));
+      });
     }
-
-    // Standard competition ranking (equal counts share a rank: 1,1,3…),
-    // plus a tier by list position: first 4 = 正取, next 2 = 備取.
-    let rank = 0;
-    let prevCount = null;
-    const rows = results.map((r, i) => {
-      if (r.count !== prevCount) {
-        rank = i + 1;
-        prevCount = r.count;
-      }
-      let tier = "other";
-      if (i < ELECTED_COUNT) tier = "elected";
-      else if (i < ELECTED_COUNT + ALTERNATE_COUNT) tier = "alternate";
-      return { name: r.name, count: r.count, rank: rank, tier: tier };
-    });
-
-    // Only the elected (正取) and alternate (備取) families are shown.
-    const groups = [
-      { tier: "elected", label: "正取 · 當選 " + ELECTED_COUNT + " 名" },
-      { tier: "alternate", label: "備取 · 候補 " + ALTERNATE_COUNT + " 名" },
-    ];
-    groups.forEach((g) => {
-      const groupRows = rows.filter((r) => r.tier === g.tier);
-      if (!groupRows.length) return;
-      const header = document.createElement("li");
-      header.className = "result-group result-group-" + g.tier;
-      header.textContent = g.label;
-      list.appendChild(header);
-      groupRows.forEach((r) => list.appendChild(resultRow(r)));
-    });
 
     $("screen-results").classList.remove("hidden");
     window.scrollTo({ top: 0 });
@@ -490,9 +516,7 @@
   // voting action (steps + all voting screens stay hidden) and announces the
   // open window; the server also never claims a ballot unless status = OPEN.
   function renderNotOpen() {
-    $("steps").classList.add("hidden");
-    SCREENS.forEach((s) => $("screen-" + s).classList.add("hidden"));
-    $("select-bar").classList.add("hidden");
+    hideVotingUI();
     hideError();
 
     const win = (window.APP_CONFIG && window.APP_CONFIG.VOTE_WINDOW) || "";

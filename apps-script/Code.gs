@@ -146,7 +146,7 @@ function handleCheck(req) {
       return fail('PASSCODE_WRONG', '領票碼錯誤，請確認後再試。');
     }
   } else {
-    // Legacy control row without a passcode; next vote issues one.
+    // Passcode was cleared (lost-passcode reset); next vote issues a fresh one.
     res.hasVoted = ballot.hasVoted;
     if (ballot.hasVoted) {
       var vrow2 = findVotes(voteToken(gate.h2));
@@ -219,7 +219,7 @@ function handleVote(req) {
           return fail('PASSCODE_WRONG', '領票碼錯誤，無法更改選票。');
         }
       } else {
-        // Legacy control row: issue a passcode on this update.
+        // Passcode was cleared (lost-passcode reset): issue a fresh one now.
         newPasscode = generatePasscode();
         control.getRange(existing.row, 5).setValue(passcodeHash(gate.h2, newPasscode));
       }
