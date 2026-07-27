@@ -9,13 +9,23 @@
  *            H2 = HMAC-SHA256(PEPPER, H1) so a leaked sheet cannot be
  *            correlated back to students without this property.
  *
+ * Ballot secrecy from the administrator (best-effort, not cryptographic):
+ *   Votes are stored in a separate `Votes` sheet keyed by
+ *   vote_token = HMAC-SHA256(PEPPER, "vote|" + H2), with NO identity column.
+ *   The `Ballots` control sheet holds identity/dedup/passcode but NO votes.
+ *   Without the PEPPER (not in the sheet) the two cannot be joined, so
+ *   casually reading the sheet does not reveal who voted for whom. A holder
+ *   of the PEPPER can still de-anonymize deliberately — this is unavoidable
+ *   when the same party owns the sheet and the script secret.
+ *
  * The normalization + canonical-string logic here is the REFERENCE
  * implementation; docs/app.js mirrors it (test vectors in README).
  */
 
 var SHEET_CONFIG = 'Config';
 var SHEET_ROSTER = 'Roster';
-var SHEET_BALLOTS = 'Ballots';
+var SHEET_BALLOTS = 'Ballots'; // control table: identity/dedup/passcode, NO votes
+var SHEET_VOTES = 'Votes';     // anonymous votes keyed by vote_token, NO identity
 var SHEET_AUDIT = 'AuditLog';
 
 var KEY_RE = /^[0-9a-f]{64}$/;
@@ -78,7 +88,7 @@ function handleCheck(req) {
     candidates: listCandidates(),
   };
 
-  var ballot = findBallot(gate.h2);
+  var ballot = findControl(gate.h2);
 
   if (!ballot) {
     if (!open) {
@@ -94,13 +104,12 @@ function handleCheck(req) {
       return fail('SERVER_ERROR', '系統忙碌中，請稍後再試。');
     }
     try {
-      ballot = findBallot(gate.h2);
+      ballot = findControl(gate.h2);
       if (!ballot) {
         var passcode = generatePasscode();
+        // Control row only: identity + passcode, no votes.
         ss().getSheetByName(SHEET_BALLOTS).appendRow([
           gate.h2,
-          gate.family.familyId,
-          '', '', '', '',
           new Date().toISOString(),
           '',
           0,
@@ -127,7 +136,8 @@ function handleCheck(req) {
       res.passcodeOk = true;
       res.hasVoted = ballot.hasVoted;
       if (ballot.hasVoted) {
-        res.currentVotes = ballot.votes;
+        var vrow = findVotes(voteToken(gate.h2));
+        res.currentVotes = vrow ? vrow.votes : [];
         res.revision = ballot.revision;
       }
     } else {
@@ -136,10 +146,11 @@ function handleCheck(req) {
       return fail('PASSCODE_WRONG', '領票碼錯誤，請確認後再試。');
     }
   } else {
-    // Legacy ballot without a passcode; next vote issues one.
+    // Legacy control row without a passcode; next vote issues one.
     res.hasVoted = ballot.hasVoted;
     if (ballot.hasVoted) {
-      res.currentVotes = ballot.votes;
+      var vrow2 = findVotes(voteToken(gate.h2));
+      res.currentVotes = vrow2 ? vrow2.votes : [];
       res.revision = ballot.revision;
     }
   }
@@ -193,9 +204,11 @@ function handleVote(req) {
     return fail('SERVER_ERROR', '系統忙碌中，請稍後再試。');
   }
   try {
-    var sheet = ss().getSheetByName(SHEET_BALLOTS);
+    var control = ss().getSheetByName(SHEET_BALLOTS);
+    var votesSheet = ss().getSheetByName(SHEET_VOTES);
     var now = new Date().toISOString();
-    var existing = findBallot(gate.h2);
+    var token = voteToken(gate.h2);
+    var existing = findControl(gate.h2);
     var status, revision, newPasscode = null;
     if (existing) {
       if (existing.passcodeHash) {
@@ -206,36 +219,25 @@ function handleVote(req) {
           return fail('PASSCODE_WRONG', '領票碼錯誤，無法更改選票。');
         }
       } else {
-        // Legacy ballot: issue a passcode on this update.
+        // Legacy control row: issue a passcode on this update.
         newPasscode = generatePasscode();
-        sheet.getRange(existing.row, 10).setValue(passcodeHash(gate.h2, newPasscode));
+        control.getRange(existing.row, 5).setValue(passcodeHash(gate.h2, newPasscode));
       }
       revision = existing.revision + 1;
-      sheet
-        .getRange(existing.row, 3, 1, 4)
-        .setValues([votes]);
-      sheet.getRange(existing.row, 8).setValue(now);
-      sheet.getRange(existing.row, 9).setValue(revision);
+      writeVotes(votesSheet, token, votes);
+      control.getRange(existing.row, 3).setValue(now); // last_updated_at
+      control.getRange(existing.row, 4).setValue(revision); // revision
       // First actual vote on a freshly claimed (empty) ballot is a claim, not a change.
       status = existing.hasVoted ? 'updated' : 'claimed';
     } else {
       revision = 1;
       newPasscode = generatePasscode();
-      sheet.appendRow([
-        gate.h2,
-        gate.family.familyId,
-        votes[0],
-        votes[1],
-        votes[2],
-        votes[3],
-        now,
-        now,
-        revision,
-        passcodeHash(gate.h2, newPasscode),
-      ]);
+      control.appendRow([gate.h2, now, now, revision, passcodeHash(gate.h2, newPasscode)]);
+      writeVotes(votesSheet, token, votes);
       status = 'claimed';
     }
-    audit('vote', gate.h2, 'OK', status + ' rev=' + revision + ' votes=' + votes.join(','));
+    // NOTE: the vote choices are deliberately NOT written to the audit log.
+    audit('vote', gate.h2, 'OK', status + ' rev=' + revision);
     var res = { ok: true, status: status, revision: revision };
     if (newPasscode) res.passcode = newPasscode;
     return jsonOut(res);
@@ -293,20 +295,19 @@ function handleResults(req) {
 }
 
 /**
- * Counts votes across vote1..vote4 for every ballot that actually voted
- * (non-empty vote1). Returns { totalBallots, results[] } sorted high→low.
+ * Counts votes across vote1..vote4 from the anonymous Votes table (one row
+ * per voted family). Returns { totalBallots, results[] } sorted high→low.
  * Shared by tally (token-gated) and results (ENDED-only, public).
  */
 function computeTally() {
   var counts = {};
-  var ballots = ss().getSheetByName(SHEET_BALLOTS).getDataRange().getValues();
+  var votes = ss().getSheetByName(SHEET_VOTES).getDataRange().getValues();
   var totalBallots = 0;
-  for (var r = 1; r < ballots.length; r++) {
-    if (!ballots[r][0]) continue;
-    if (!String(ballots[r][2])) continue; // claimed but not voted
+  for (var r = 1; r < votes.length; r++) {
+    if (!votes[r][0]) continue; // no token = empty row
     totalBallots++;
-    for (var c = 2; c <= 5; c++) {
-      var id = String(ballots[r][c]);
+    for (var c = 1; c <= 4; c++) {
+      var id = String(votes[r][c]);
       if (id) counts[id] = (counts[id] || 0) + 1;
     }
   }
@@ -396,20 +397,50 @@ function listCandidates() {
   return out;
 }
 
-function findBallot(h2) {
+// Control table (Ballots): identity/dedup/passcode, no votes.
+// Columns: key_hash | first_claimed_at | last_updated_at | revision | passcode_hash
+function findControl(h2) {
   var rows = ss().getSheetByName(SHEET_BALLOTS).getDataRange().getValues();
   for (var r = 1; r < rows.length; r++) {
     if (String(rows[r][0]) === h2) {
+      var revision = Number(rows[r][3]) || 0;
       return {
         row: r + 1,
-        votes: [rows[r][2], rows[r][3], rows[r][4], rows[r][5]].map(String),
-        hasVoted: !!String(rows[r][2]),
-        revision: Number(rows[r][8]) || 0,
-        passcodeHash: rows[r][9] ? String(rows[r][9]) : '',
+        revision: revision,
+        hasVoted: revision > 0,
+        passcodeHash: rows[r][4] ? String(rows[r][4]) : '',
       };
     }
   }
   return null;
+}
+
+// Anonymous votes table, keyed by vote_token = HMAC(PEPPER, "vote|"+H2).
+// Columns: vote_token | vote1 | vote2 | vote3 | vote4
+function findVotes(token) {
+  var rows = ss().getSheetByName(SHEET_VOTES).getDataRange().getValues();
+  for (var r = 1; r < rows.length; r++) {
+    if (String(rows[r][0]) === token) {
+      return {
+        row: r + 1,
+        votes: [rows[r][1], rows[r][2], rows[r][3], rows[r][4]].map(String),
+      };
+    }
+  }
+  return null;
+}
+
+// Upsert a family's votes by token, then sort the sheet by token so row
+// order is random (a hash) and carries no voting-order/time information.
+function writeVotes(sheet, token, votes) {
+  var existing = findVotes(token);
+  if (existing) {
+    sheet.getRange(existing.row, 2, 1, 4).setValues([votes]);
+  } else {
+    sheet.appendRow([token, votes[0], votes[1], votes[2], votes[3]]);
+  }
+  var last = sheet.getLastRow();
+  if (last > 2) sheet.getRange(2, 1, last - 1, 5).sort(1);
 }
 
 /* ---------------- crypto ---------------- */
@@ -446,6 +477,14 @@ function passcodeHash(h2, passcode) {
   var pepper = PropertiesService.getScriptProperties().getProperty('PEPPER');
   if (!pepper) throw new Error('PEPPER script property is not set');
   return bytesToHex(Utilities.computeHmacSha256Signature(h2 + '|' + passcode, pepper));
+}
+
+// Opaque key that links a family to its Votes row WITHOUT revealing identity:
+// reversible only with the PEPPER, which is not stored in the sheet.
+function voteToken(h2) {
+  var pepper = PropertiesService.getScriptProperties().getProperty('PEPPER');
+  if (!pepper) throw new Error('PEPPER script property is not set');
+  return bytesToHex(Utilities.computeHmacSha256Signature('vote|' + h2, pepper));
 }
 
 function bytesToHex(bytes) {
@@ -553,16 +592,15 @@ function adminSetupSheets() {
       name: SHEET_BALLOTS,
       headers: [
         'key_hash',
-        'family_id',
-        'vote1',
-        'vote2',
-        'vote3',
-        'vote4',
         'first_claimed_at',
         'last_updated_at',
         'revision',
         'passcode_hash',
       ],
+    },
+    {
+      name: SHEET_VOTES,
+      headers: ['vote_token', 'vote1', 'vote2', 'vote3', 'vote4'],
     },
     { name: SHEET_AUDIT, headers: ['timestamp', 'action', 'key_prefix', 'result', 'detail'] },
   ];
@@ -591,6 +629,56 @@ function adminSetupSheets() {
     if (!(kv[0] in config)) configSheet.appendRow(kv);
   });
   adminRebuildHashes();
+}
+
+/**
+ * One-time migration / fresh start for the anonymized-ballot schema.
+ * Rebuilds the control `Ballots` sheet (identity/passcode, NO votes) and the
+ * anonymous `Votes` sheet (vote_token + votes, NO identity), and clears
+ * AuditLog rows. DESTROYS any existing ballots — run only with disposable
+ * (e.g. test) data, before real voting begins.
+ */
+function adminResetBallots() {
+  var s = ss();
+  var b = s.getSheetByName(SHEET_BALLOTS) || s.insertSheet(SHEET_BALLOTS);
+  b.clear();
+  b.getRange(1, 1, 1, 5)
+    .setValues([['key_hash', 'first_claimed_at', 'last_updated_at', 'revision', 'passcode_hash']])
+    .setFontWeight('bold');
+
+  var v = s.getSheetByName(SHEET_VOTES) || s.insertSheet(SHEET_VOTES);
+  v.clear();
+  v.getRange(1, 1, 1, 5)
+    .setValues([['vote_token', 'vote1', 'vote2', 'vote3', 'vote4']])
+    .setFontWeight('bold');
+
+  var a = s.getSheetByName(SHEET_AUDIT);
+  if (a && a.getLastRow() > 1) {
+    a.getRange(2, 1, a.getLastRow() - 1, a.getLastColumn()).clearContent();
+  }
+}
+
+/**
+ * Lost-passcode reset for one family. Looks up the family's key_hash from the
+ * Roster, finds its control row, and clears passcode_hash — the family's next
+ * vote then issues a fresh passcode and overwrites their existing (anonymous)
+ * Votes row via the token, so the tally is never double-counted or lost.
+ * Votes are NOT touched. Run from the editor, e.g. adminClearPasscode('F07').
+ */
+function adminClearPasscode(familyId) {
+  var roster = readRoster();
+  var h2 = null;
+  for (var r = 1; r < roster.length; r++) {
+    if (String(roster[r][0]) === String(familyId)) {
+      h2 = String(roster[r][4]).toLowerCase();
+      break;
+    }
+  }
+  if (!h2) throw new Error('Unknown family_id: ' + familyId);
+  var control = findControl(h2);
+  if (!control) throw new Error('No ballot claimed yet for ' + familyId);
+  ss().getSheetByName(SHEET_BALLOTS).getRange(control.row, 5).setValue('');
+  return familyId + ': passcode cleared; their next vote issues a new one.';
 }
 
 /**
@@ -638,7 +726,7 @@ function adminCreateResultsTab() {
   );
   sheet.getRange('A1').setFontWeight('bold').setFontSize(13);
   sheet.getRange('A2').setValue('投票戶數');
-  sheet.getRange('B2').setFormula('=IF(Config!$B$2="ENDED",COUNTIF(Ballots!$C$2:$C,"<>"),"—")');
+  sheet.getRange('B2').setFormula('=IF(Config!$B$2="ENDED",COUNTIF(Votes!$B$2:$B,"<>"),"—")');
   sheet.getRange('A4:C4').setValues([['名次', '候選家庭', '得票數']]);
   sheet.getRange('A4:C4').setFontWeight('bold');
 
@@ -651,7 +739,7 @@ function adminCreateResultsTab() {
     var rr = r + 2; // roster data row
     helper.push([
       '=Roster!B' + rr,
-      '=IF(Config!$B$2="ENDED",COUNTIF(Ballots!$C$2:$F,Roster!A' + rr + '),"")',
+      '=IF(Config!$B$2="ENDED",COUNTIF(Votes!$B$2:$E,Roster!A' + rr + '),"")',
     ]);
   }
   sheet.getRange(first, 5, n, 2).setFormulas(helper);

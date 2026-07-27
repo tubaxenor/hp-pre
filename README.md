@@ -10,11 +10,11 @@ Static voting site for a class parent-representative election.
 
 1. A parent enters their student's name + student number (twins: both students). The browser normalizes the input and computes `H1 = SHA-256(canonical string)` via the Web Crypto API. **Raw names/numbers never leave the browser** — only H1 is sent.
 2. The server computes `H2 = HMAC-SHA256(PEPPER, H1)` and looks it up in the roster. Valid key → returns candidates and ballot state.
-3. First successful identity check **claims the ballot immediately**: a Ballots row is created (votes empty, revision 0) and a **5-char passcode (領票碼)** is issued and shown once with a save-it warning — the server stores only `HMAC-SHA256(PEPPER, key_hash|passcode)`.
-4. Every later visit (and every vote) requires the passcode before the voted/unvoted state or current votes are revealed or overwritten. First actual vote = revision 1 (領選票); overwrites increment (更改選票). A family can never obtain a second ballot; tally counts only rows with votes.
+3. First successful identity check **claims the ballot immediately**: a `Ballots` control row is created (no votes, revision 0) and a **5-char passcode (領票碼)** is issued and shown once with a save-it warning — the server stores only `HMAC-SHA256(PEPPER, key_hash|passcode)`.
+4. Every later visit (and every vote) requires the passcode before the voted/unvoted state or current votes are revealed or overwritten. Votes are written to the separate anonymous `Votes` sheet keyed by the vote token, so identity and votes are never stored together. First actual vote = revision 1 (領選票); overwrites increment (更改選票). A family can never obtain a second ballot; tally counts the `Votes` table.
 5. While voting is OPEN/CLOSED, results are readable only via the `tally` action with a secret admin token, and the spreadsheet itself is owner-only. When the admin sets `ELECTION_STATUS = ENDED`, the site publishes the final ranked results to any visitor (token-free `results` action, gated on `ENDED`) and blocks all further voting.
 
-**Lost passcode**: the admin clears that row's `passcode_hash` cell in `Ballots`; the family's next vote issues a fresh passcode.
+**Lost passcode**: run `adminClearPasscode('F07')` from the editor (or copy the family's `key_hash` from `Roster` col E, Ctrl+F it in `Ballots`, and clear that row's `passcode_hash` cell). **Do not delete rows.** The family's next vote issues a fresh passcode and overwrites their existing `Votes` row via the token, so the tally is never double-counted or lost. The `Votes` table is never touched by hand.
 
 ## Key scheme (spec)
 
@@ -34,14 +34,15 @@ printf 'hp-pre-v1|測試生|1' | shasum -a 256
 # twins entered in either order    → same H1
 ```
 
-## Spreadsheet layout (private, owner-only, 4 tabs)
+## Spreadsheet layout (private, owner-only)
 
 | Tab | Columns |
 |---|---|
 | `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN` / `CLOSED` / `ENDED`), `SALT` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
 | `結果` | Ranked vote tally (formula-driven). Stays blank until `ELECTION_STATUS = ENDED`. Create/rebuild with `adminCreateResultsTab()`. |
 | `Roster` | A: `family_id` (F01…), B: `display_name` (candidate label), C: `student_names` (comma-separated for twins), D: `student_numbers`, E: `key_hash` (H2 — filled by `adminRebuildHashes()`, never by hand), F: `eligible` (Y/N), G: `notes`, H: `self_recommended` (`Y` floats the family to the top of the ballot with a 自薦 badge) |
-| `Ballots` | A: `key_hash`, B: `family_id`, C–F: `vote1..vote4`, G: `first_claimed_at`, H: `last_updated_at`, I: `revision`, J: `passcode_hash` |
+| `Ballots` (control) | A: `key_hash`, B: `first_claimed_at`, C: `last_updated_at`, D: `revision`, E: `passcode_hash` — **no votes**: this table only shows *that* a family claimed/voted, never *what* |
+| `Votes` (anonymous) | A: `vote_token` = `HMAC(PEPPER, "vote\|" + key_hash)`, B–E: `vote1..vote4` — **no identity column**; not joinable to a family without the PEPPER (which is not in the sheet). Kept sorted by token so row order is random |
 | `AuditLog` | A: timestamp, B: action, C: key prefix (12 hex), D: result, E: detail |
 
 Header row required on every tab. The **PEPPER is NOT in the sheet** — it lives in Apps Script → Project Settings → Script Properties.
@@ -55,7 +56,7 @@ Repo is served by GitHub Pages from `main` branch, `/docs` folder → https://tu
 ### 2. Spreadsheet
 
 1. Create a private Google Spreadsheet (link sharing OFF).
-2. Add the 4 tabs above with header rows.
+2. Add the tabs above with header rows (or run `adminSetupSheets()` once from the Apps Script editor to create them).
 3. Fill `Config` (`ELECTION_STATUS=CLOSED` for now) and `Roster` columns A–D and F.
 
 ### 3. Secrets
@@ -113,7 +114,7 @@ curl -sL -H 'Content-Type: text/plain;charset=utf-8' \
 ## Threat model / accepted limitations
 
 - **Impersonation**: anyone who knows a student's name + number can claim that family's ballot **first** — but once claimed, changing it requires the 5-char passcode issued at claim time, so a ballot cannot be silently overwritten by name+number knowledge alone. Residual risk: an attacker claiming before the real family does (the family then reports being unable to claim, and the admin investigates via `AuditLog`). Other mitigations: append-only `AuditLog`, visible revision counter (「第 N 次填寫」).
-- **Ballot secrecy from the administrator**: none — the sheet owner can map ballots to families. Inherent to "one family, changeable ballot".
+- **Ballot secrecy from the administrator**: best-effort, not cryptographic. Votes live in the `Votes` sheet keyed by `vote_token = HMAC(PEPPER, "vote|"+key_hash)` with no identity column; the `Ballots` control sheet has the identity but no votes. Casually reading the sheet does **not** reveal who voted for whom — joining the two requires the `PEPPER` (Script Property, not in the sheet). A holder of the `PEPPER` (i.e. the owner) can still de-anonymize deliberately with a script; that is unavoidable when one party owns both the sheet and the secret. The `Votes` table is kept sorted by token so row order leaks no timing; `AuditLog` no longer records vote choices.
 - **Result disclosure**: intentional once `ENDED`. Candidate names + per-candidate counts + turnout become public to anyone with the site URL. Before `ENDED`, the `results` action returns no counts, so nothing leaks early. Individual ballots are never exposed by any public action.
 - **Sheet leak**: `Ballots`/`Roster.key_hash` store only peppered H2; correlation requires also compromising the Script Property.
 - **Rate limiting**: GAS cannot see client IPs; a global brake (30 failed lookups / 10 min → `RATE_LIMITED`) slows roster guessing. Same brake covers bad tally tokens.
