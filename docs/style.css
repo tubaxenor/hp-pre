@@ -206,8 +206,8 @@ body {
 }
 .candidate-cell.disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Self-recommended (自薦) families — floated to the top, tagged. */
-.candidate-selfrec { border-color: var(--seal); background: oklch(56% 0.17 42 / 0.05); }
+/* Self-recommended (自薦) families — floated to the top, tagged with a badge
+   only (no cell highlight, so it isn't mistaken for a selected candidate). */
 .candidate-badge {
   position: absolute;
   top: -0.55rem;
