@@ -384,8 +384,15 @@ function listCandidates() {
   for (var r = 1; r < rows.length; r++) {
     if (!rows[r][0]) continue;
     if (String(rows[r][5]).trim().toUpperCase() !== 'Y') continue;
-    out.push({ id: String(rows[r][0]), name: String(rows[r][1]) });
+    out.push({
+      id: String(rows[r][0]),
+      name: String(rows[r][1]),
+      selfRec: String(rows[r][7]).trim().toUpperCase() === 'Y',
+    });
   }
+  // Self-recommended (自薦) families float to the top of the ballot; roster
+  // order is kept within each group (Array.prototype.sort is stable).
+  out.sort(function (a, b) { return (b.selfRec ? 1 : 0) - (a.selfRec ? 1 : 0); });
   return out;
 }
 
@@ -539,6 +546,7 @@ function adminSetupSheets() {
         'key_hash',
         'eligible',
         'notes',
+        'self_recommended',
       ],
     },
     {

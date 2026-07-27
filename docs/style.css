@@ -206,6 +206,24 @@ body {
 }
 .candidate-cell.disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Self-recommended (自薦) families — floated to the top, tagged. */
+.candidate-selfrec { border-color: var(--seal); background: oklch(56% 0.17 42 / 0.05); }
+.candidate-badge {
+  position: absolute;
+  top: -0.55rem;
+  right: -0.4rem;
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  color: var(--color-primary-content);
+  background: var(--seal);
+  padding: 0.1rem 0.42rem;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px oklch(30% 0.03 55 / 0.25);
+}
+
 /* ---- Current votes list ---- */
 .current-votes { display: flex; flex-direction: column; gap: 0.4rem; }
 .current-votes li {

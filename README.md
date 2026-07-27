@@ -40,7 +40,7 @@ printf 'hp-pre-v1|測試生|1' | shasum -a 256
 |---|---|
 | `Config` | A: key, B: value — `ELECTION_STATUS` (`OPEN` / `CLOSED` / `ENDED`), `SALT` (sha256 hex of token), `VOTES_REQUIRED` (4), `ELECTION_TITLE` |
 | `結果` | Ranked vote tally (formula-driven). Stays blank until `ELECTION_STATUS = ENDED`. Create/rebuild with `adminCreateResultsTab()`. |
-| `Roster` | A: `family_id` (F01…), B: `display_name` (candidate label), C: `student_names` (comma-separated for twins), D: `student_numbers`, E: `key_hash` (H2 — filled by `adminRebuildHashes()`, never by hand), F: `eligible` (Y/N), G: `notes` |
+| `Roster` | A: `family_id` (F01…), B: `display_name` (candidate label), C: `student_names` (comma-separated for twins), D: `student_numbers`, E: `key_hash` (H2 — filled by `adminRebuildHashes()`, never by hand), F: `eligible` (Y/N), G: `notes`, H: `self_recommended` (`Y` floats the family to the top of the ballot with a 自薦 badge) |
 | `Ballots` | A: `key_hash`, B: `family_id`, C–F: `vote1..vote4`, G: `first_claimed_at`, H: `last_updated_at`, I: `revision`, J: `passcode_hash` |
 | `AuditLog` | A: timestamp, B: action, C: key prefix (12 hex), D: result, E: detail |
 

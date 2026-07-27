@@ -268,7 +268,7 @@
     grid.innerHTML = "";
     state.candidates.forEach((c) => {
       const label = document.createElement("label");
-      label.className = "candidate-cell";
+      label.className = "candidate-cell" + (c.selfRec ? " candidate-selfrec" : "");
       label.dataset.id = c.id;
 
       const input = document.createElement("input");
@@ -290,6 +290,12 @@
       });
 
       label.append(input, mark, name);
+      if (c.selfRec) {
+        const badge = document.createElement("span");
+        badge.className = "candidate-badge";
+        badge.textContent = "自薦";
+        label.appendChild(badge);
+      }
       grid.appendChild(label);
     });
     refreshSelection();
