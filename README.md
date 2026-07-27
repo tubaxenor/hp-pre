@@ -33,28 +33,8 @@ Changing the state takes effect on the next page load — no redeploy.
 
 - **Self-recommended family** — `Roster` col `self_recommended` = `Y`.
 - **Exclude a family** — `Roster` col `eligible` = anything but `Y` (can't vote, not a candidate).
-- **Lost passcode** — run `adminClearPasscode('F07')` in the editor; **never delete rows**. Their next vote issues a fresh passcode and safely overwrites their existing vote.
+- **Lost passcode** — reset it from the Apps Script editor (owner-only); **never delete rows**. Their next vote issues a fresh passcode and safely overwrites their existing vote.
 - **Reveal results** — set `ELECTION_STATUS = ENDED`.
-- **Tally anytime** — `POST {"action":"tally","adminToken":"<token>"}` to the `/exec` URL.
-
-## Admin functions (run from the Apps Script editor)
-
-| Function | Does |
-|---|---|
-| `adminSetupSheets()` | create all tabs |
-| `adminRebuildHashes()` | fill `Roster.key_hash` — re-run after any roster edit |
-| `adminCreateResultsTab()` | build/rebuild `結果` |
-| `adminResetBallots()` | wipe `Ballots`+`Votes`+`AuditLog` to a clean slate (run before go-live) |
-| `adminClearPasscode('F##')` | lost-passcode reset |
-
-## Setup (once)
-
-1. Private Spreadsheet → Extensions → Apps Script → paste `Code.gs` (+ manifest from `apps-script/appsscript.json`).
-2. Script Properties → add `PEPPER` = `openssl rand -hex 32`.
-3. `Config.SALT` = `printf '%s' "<admin-token>" | shasum -a 256` (keep the token in a password manager).
-4. Fill `Roster` cols A–D and F → run `adminSetupSheets()`, then `adminRebuildHashes()`.
-5. Deploy → Web app → Execute as **Me** / access **Anyone** → put the `/exec` URL and `VOTE_WINDOW` into `docs/config.js` → commit + push.
-6. Later code changes: paste → Deploy → **Manage deployments → edit → New version** (keeps the same URL).
 
 ## Key derivation
 
@@ -63,9 +43,3 @@ The browser sends only `H1 = SHA-256("hp-pre-v1|name|num"[|name2|num2])`; the se
 ```bash
 printf 'hp-pre-v1|測試生|1' | shasum -a 256   # test vector
 ```
-
-## Limits
-
-- Anyone who knows a family's name+number can claim that ballot **first**; the passcode then guards all later changes. `AuditLog` + visible revision counter cover disputes.
-- No CAPTCHA / per-IP limits (GAS can't see client IPs); a global brake (30 failed lookups / 10 min) slows guessing.
-- Results are intentionally public once `ENDED`.
