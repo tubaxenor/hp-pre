@@ -83,6 +83,28 @@ body {
   letter-spacing: 0.15em;
   opacity: 0.65;
 }
+.doc-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.test-badge {
+  align-self: flex-start;
+  margin-top: 0.3rem;
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  color: oklch(34% 0.07 70);
+  background: oklch(86% 0.12 85 / 0.9);
+  border: 1px solid oklch(62% 0.13 78 / 0.65);
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+  line-height: 1.4;
+}
 
 /* ---- Cards as ballot paper ---- */
 .ballot-card {

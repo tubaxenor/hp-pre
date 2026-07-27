@@ -385,6 +385,11 @@
 
   $("error-dismiss").addEventListener("click", hideError);
 
+  // Test-mode badge by the title (config-toggled), visible on every screen.
+  if (window.APP_CONFIG && window.APP_CONFIG.TEST_MODE) {
+    $("test-badge").classList.remove("hidden");
+  }
+
   /* ---------- results screen (ELECTION_STATUS = ENDED) ---------- */
 
   // Top 4 candidates are elected (正取) representatives; the next 2 are

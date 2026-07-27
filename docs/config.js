@@ -5,4 +5,6 @@ window.APP_CONFIG = {
   // Shown on the "not started yet" screen while ELECTION_STATUS is CLOSED.
   // Split on "～" renders start / end on separate lines.
   VOTE_WINDOW: "2026/08/27 20:00 ～ 2026/08/29 11:00",
+  // Shows a "測試" badge by the title. Set false for the real election.
+  TEST_MODE: true,
 };
