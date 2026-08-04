@@ -28,6 +28,12 @@ var SHEET_BALLOTS = 'Ballots'; // control table: identity/dedup/passcode, NO vot
 var SHEET_VOTES = 'Votes';     // anonymous votes keyed by vote_token, NO identity
 var SHEET_AUDIT = 'AuditLog';
 
+// Header rows. Readers loop from r=1 (row 1 is assumed to be the header), so a
+// header MUST occupy row 1 — otherwise appendRow fills row 1 and that record is
+// skipped by every reader. ensureHeader() self-heals this before any append.
+var BALLOTS_HEADERS = ['key_hash', 'first_claimed_at', 'last_updated_at', 'revision', 'passcode_hash'];
+var VOTES_HEADERS = ['vote_token', 'vote1', 'vote2', 'vote3', 'vote4'];
+
 var KEY_RE = /^[0-9a-f]{64}$/;
 var RATE_LIMIT_MAX_FAILURES = 30;
 var RATE_LIMIT_WINDOW_SECONDS = 600;
@@ -108,7 +114,9 @@ function handleCheck(req) {
       if (!ballot) {
         var passcode = generatePasscode();
         // Control row only: identity + passcode, no votes.
-        ss().getSheetByName(SHEET_BALLOTS).appendRow([
+        var ballotsSheet = ss().getSheetByName(SHEET_BALLOTS);
+        ensureHeader(ballotsSheet, BALLOTS_HEADERS);
+        ballotsSheet.appendRow([
           gate.h2,
           new Date().toISOString(),
           '',
@@ -232,6 +240,7 @@ function handleVote(req) {
     } else {
       revision = 1;
       newPasscode = generatePasscode();
+      ensureHeader(control, BALLOTS_HEADERS);
       control.appendRow([gate.h2, now, now, revision, passcodeHash(gate.h2, newPasscode)]);
       writeVotes(votesSheet, token, votes);
       status = 'claimed';
@@ -351,6 +360,14 @@ function ss() {
   return SpreadsheetApp.getActive();
 }
 
+// Guarantees the header row exists before an append, so appendRow lands in
+// row 2+ (readers skip row 1). Self-heals a sheet that was cleared by hand.
+function ensureHeader(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  }
+}
+
 function readConfig() {
   var values = ss().getSheetByName(SHEET_CONFIG).getDataRange().getValues();
   var config = {};
@@ -433,6 +450,7 @@ function findVotes(token) {
 // Upsert a family's votes by token, then sort the sheet by token so row
 // order is random (a hash) and carries no voting-order/time information.
 function writeVotes(sheet, token, votes) {
+  ensureHeader(sheet, VOTES_HEADERS);
   var existing = findVotes(token);
   if (existing) {
     sheet.getRange(existing.row, 2, 1, 4).setValues([votes]);
